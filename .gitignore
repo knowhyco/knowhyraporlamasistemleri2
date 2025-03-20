@@ -1,0 +1,14 @@
+node_modules/
+.env
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+.cache/
+*.swp
+*.swo
+venv/
+.idea/
+.vscode/
+.pytest_cache/
+logs/

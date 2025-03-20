@@ -1,0 +1,199 @@
+{
+  "reports": [
+    {
+      "id": "1",
+      "name": "Belirli Bir Gündeki Konuşma Oturumları",
+      "description": "Seçilen günde gerçekleşen tüm konuşma oturumlarını listeler",
+      "sqlFile": "1_belirli_bir_gundeki_konusma_oturumlarini_listele.sql",
+      "category": "Zaman Bazlı Analizler",
+      "parameters": [
+        {
+          "name": "TABLE_NAME",
+          "type": "string",
+          "label": "Tablo Adı",
+          "required": true
+        },
+        {
+          "name": "SELECTED_DATE",
+          "type": "date",
+          "label": "Tarih",
+          "required": true,
+          "defaultValue": "CURRENT_DATE"
+        }
+      ]
+    },
+    {
+      "id": "1a",
+      "name": "Tarih Aralığındaki Konuşma Oturumları",
+      "description": "Belirlenen tarih aralığındaki tüm konuşma oturumlarını listeler",
+      "sqlFile": "1a_tarih_araligindaki_konusma_oturumlari.sql",
+      "category": "Zaman Bazlı Analizler",
+      "parameters": [
+        {
+          "name": "TABLE_NAME",
+          "type": "string",
+          "label": "Tablo Adı",
+          "required": true
+        },
+        {
+          "name": "START_DATE",
+          "type": "datetime",
+          "label": "Başlangıç Tarihi",
+          "required": true,
+          "defaultValue": "CURRENT_DATE - INTERVAL '7 days'"
+        },
+        {
+          "name": "END_DATE",
+          "type": "datetime",
+          "label": "Bitiş Tarihi",
+          "required": true,
+          "defaultValue": "CURRENT_DATE"
+        }
+      ]
+    },
+    {
+      "id": "2",
+      "name": "Context Kullanan Yanıtlar Dahil Detaylı Oturum Görünümü",
+      "description": "Belirli bir oturumdaki tüm mesajları ve context kullanım durumunu kronolojik sırayla listeler",
+      "sqlFile": "2_Context_kullanan_yanitlar_dahil_detayli_oturum_gorunumu.sql",
+      "category": "Detaylı Görünümler",
+      "parameters": [
+        {
+          "name": "TABLE_NAME",
+          "type": "string",
+          "label": "Tablo Adı",
+          "required": true
+        },
+        {
+          "name": "SESSION_ID",
+          "type": "string",
+          "label": "Oturum ID",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "3",
+      "name": "Context Kullanım İstatistikleri",
+      "description": "Belirlenen gün aralığında context kullanım istatistiklerini gösterir",
+      "sqlFile": "3_Context_kullanim_istatistikleri.sql",
+      "category": "İçerik Analizleri",
+      "parameters": [
+        {
+          "name": "TABLE_NAME",
+          "type": "string",
+          "label": "Tablo Adı",
+          "required": true
+        },
+        {
+          "name": "DAYS_INTERVAL",
+          "type": "number",
+          "label": "Gün Sayısı",
+          "required": true,
+          "defaultValue": "30"
+        }
+      ]
+    },
+    {
+      "id": "4",
+      "name": "En Sık Sorulan Sorular/Konular",
+      "description": "Belirlenen tarih aralığında en sık sorulan soru ve konuların analizini yapar",
+      "sqlFile": "4_En_Sik_Sorulan_Sorular_Konular.sql",
+      "category": "İçerik Analizleri",
+      "parameters": [
+        {
+          "name": "TABLE_NAME",
+          "type": "string",
+          "label": "Tablo Adı",
+          "required": true
+        },
+        {
+          "name": "START_DATE",
+          "type": "date",
+          "label": "Başlangıç Tarihi",
+          "required": true,
+          "defaultValue": "CURRENT_DATE - INTERVAL '30 days'"
+        },
+        {
+          "name": "END_DATE",
+          "type": "date",
+          "label": "Bitiş Tarihi",
+          "required": true,
+          "defaultValue": "CURRENT_DATE"
+        },
+        {
+          "name": "TOPIC_CASE_EXPRESSION",
+          "type": "sql_case",
+          "label": "Konu Kategorizasyonu",
+          "required": true,
+          "defaultValue": "CASE WHEN LOWER(content) LIKE '%saat%' THEN 'Çalışma Saatleri' ELSE 'Diğer' END"
+        }
+      ]
+    },
+    {
+      "id": "8",
+      "name": "Kelime Kullanım Matriksi",
+      "description": "En sık kullanılan kelimeleri ve kullanım sayılarını analiz eder",
+      "sqlFile": "8_Kelime_Kullanim_Matriksi.sql",
+      "category": "İçerik Analizleri",
+      "parameters": [
+        {
+          "name": "TABLE_NAME",
+          "type": "string",
+          "label": "Tablo Adı",
+          "required": true
+        },
+        {
+          "name": "EXCLUDED_WORDS",
+          "type": "string_array",
+          "label": "Hariç Tutulacak Kelimeler",
+          "required": true,
+          "defaultValue": "'merhaba','selam','nasıl','için','hello'"
+        },
+        {
+          "name": "MIN_WORD_LENGTH",
+          "type": "number",
+          "label": "Minimum Kelime Uzunluğu",
+          "required": true,
+          "defaultValue": "3"
+        },
+        {
+          "name": "MIN_WORD_COUNT",
+          "type": "number",
+          "label": "Minimum Kelime Sayısı",
+          "required": true,
+          "defaultValue": "5"
+        },
+        {
+          "name": "WORD_LIMIT",
+          "type": "number",
+          "label": "Sonuç Limiti",
+          "required": true,
+          "defaultValue": "1000"
+        }
+      ]
+    },
+    {
+      "id": "18",
+      "name": "Son 24 Saatteki Aktif Oturumlar",
+      "description": "Son 24 saat içerisinde gerçekleşen aktif konuşma oturumlarını listeler",
+      "sqlFile": "18_Son_24_saatteki_aktif_oturumlar.sql",
+      "category": "Zaman Bazlı Analizler",
+      "parameters": [
+        {
+          "name": "TABLE_NAME",
+          "type": "string",
+          "label": "Tablo Adı",
+          "required": true
+        },
+        {
+          "name": "MIN_MESSAGE_COUNT",
+          "type": "number",
+          "label": "Minimum Mesaj Sayısı",
+          "required": true,
+          "defaultValue": "2"
+        }
+      ]
+    }
+  ]
+} 
