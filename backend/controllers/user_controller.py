@@ -41,13 +41,6 @@ def login():
     Kullanıcı girişi için endpoint
     """
     try:
-        # Kurulum kontrolü
-        if not is_setup_done():
-            return jsonify({
-                'status': 'error',
-                'message': 'Sistem kurulumu tamamlanmamış'
-            }), 400
-        
         data = request.get_json()
         
         username = data.get('username')
@@ -59,6 +52,43 @@ def login():
                 'message': 'Kullanıcı adı ve şifre gerekli'
             }), 400
         
+        # Kurulum kontrolü
+        setup_done = is_setup_done()
+        logging.info(f"Login attempt: {username}, Setup done: {setup_done}")
+        
+        # Kurulum tamamlanmamışsa ve admin/admin123 girişi yapılıyorsa
+        if not setup_done and username == 'admin' and password == 'admin123':
+            # Geçici admin token'ı oluştur
+            token = jwt.encode({
+                'sub': '0',
+                'username': 'admin',
+                'role': 'admin',
+                'is_temp_admin': True,
+                'exp': datetime.utcnow() + timedelta(seconds=JWT_EXPIRATION)
+            }, JWT_SECRET)
+            
+            logging.info("Temporary admin login for setup")
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Kurulum için geçici admin girişi başarılı',
+                'token': token,
+                'user': {
+                    'id': 0,
+                    'username': 'admin',
+                    'role': 'admin',
+                    'is_temp': True
+                }
+            })
+            
+        # Kurulum tamamlanmamış ve varsayılan admin girişi değilse
+        if not setup_done and (username != 'admin' or password != 'admin123'):
+            return jsonify({
+                'status': 'error',
+                'message': 'Sistem kurulumu tamamlanmamış. Lütfen varsayılan admin bilgileriyle giriş yapın.'
+            }), 400
+        
+        # Kurulum tamamlanmışsa, normal giriş işlemi
         # Kullanıcıyı bul
         query = f"""
         SELECT id, username, password, role

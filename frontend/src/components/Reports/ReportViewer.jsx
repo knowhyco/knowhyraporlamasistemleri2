@@ -5,8 +5,9 @@ import {
   Accordion, AccordionSummary, AccordionDetails,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Dialog, DialogTitle, DialogContent, DialogActions,
-  Tabs, Tab, Tooltip, Stack
+  Tabs, Tab, Tooltip, Stack, Snackbar
 } from '@mui/material';
+import MuiAlert from '@mui/material/Alert';
 import { 
   ExpandMore, PlayArrow, Save, Code, BarChart,
   Close, Settings, InfoOutlined,
@@ -40,11 +41,20 @@ const ReportViewer = ({ selectedReport, onRegisterReport }) => {
   const [tabValue, setTabValue] = useState(0);
   const [realTimeEnabled, setRealTimeEnabled] = useState(false);
   const [realTimeInterval, setRealTimeInterval] = useState(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'info' });
   const chartRefs = {
     bar: useRef(null),
     pie: useRef(null)
   };
   const tableRef = useRef(null);
+
+  // Snackbar'ı kapat
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setSnackbar({ ...snackbar, open: false });
+  };
 
   // Rapor değiştiğinde detayları getir
   useEffect(() => {
@@ -635,6 +645,23 @@ const ReportViewer = ({ selectedReport, onRegisterReport }) => {
           <Button onClick={() => setShowSqlDialog(false)}>Kapat</Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Snackbar */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={6000} 
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <MuiAlert
+          elevation={6}
+          variant="filled"
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+        >
+          {snackbar.message}
+        </MuiAlert>
+      </Snackbar>
     </Paper>
   );
 };

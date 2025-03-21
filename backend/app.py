@@ -38,7 +38,10 @@ except Exception as e:
 
 # Uygulama ve Socket.IO başlatma
 app = Flask(__name__)
-CORS(app)
+
+# CORS yapılandırması - Tüm kaynaklardan gelen isteklere izin ver
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
 # socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Blueprints (Controller'lar) import edilecek
@@ -50,6 +53,10 @@ from controllers.report_controller import report_bp
 app.register_blueprint(admin_bp, url_prefix='/api/admin')
 app.register_blueprint(user_bp, url_prefix='/api/users')
 app.register_blueprint(report_bp, url_prefix='/api/reports')
+
+# Auth blueprintini kaydet - isim çakışmasını önlemek için farklı bir isim ver
+from controllers.user_controller import user_bp as auth_bp
+app.register_blueprint(auth_bp, url_prefix='/api/auth', name='auth')
 
 # Ana root endpoint
 @app.route('/')

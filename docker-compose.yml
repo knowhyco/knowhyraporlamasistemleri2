@@ -13,6 +13,8 @@ services:
     restart: unless-stopped
     environment:
       - FLASK_ENV=development
+    networks:
+      - knowhy-network
 
   frontend:
     build:
@@ -26,4 +28,14 @@ services:
       - .env
     depends_on:
       - backend
-    restart: unless-stopped 
+    restart: unless-stopped
+    environment:
+      - COMPOSE_HTTP_TIMEOUT=180
+      - NODE_OPTIONS="--max-old-space-size=4096"
+      - REACT_APP_API_URL=http://backend:8000/api
+    networks:
+      - knowhy-network
+
+networks:
+  knowhy-network:
+    driver: bridge 

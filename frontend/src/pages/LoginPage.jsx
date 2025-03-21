@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import { Lock, Person } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api, { getApiBaseUrl } from '../services/apiConfig';
 
 const LoginPage = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
@@ -23,7 +23,8 @@ const LoginPage = ({ onLogin }) => {
   
   const checkSetupStatus = async () => {
     try {
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/system/setup-status`);
+      // Merkezi API kullanarak doğrudan endpoint'e istek yolla
+      const response = await api.get("/system/setup-status");
       setIsSetupMode(!response.data.is_setup_complete);
       
       // Eğer kurulum tamamlanmadıysa varsayılan admin bilgilerini yerleştir
@@ -50,7 +51,8 @@ const LoginPage = ({ onLogin }) => {
       setLoading(true);
       setError(null);
       
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/auth/login`, {
+      // Merkezi API yapılandırmasını kullanarak login isteği
+      const response = await api.post("/auth/login", {
         username,
         password
       });
