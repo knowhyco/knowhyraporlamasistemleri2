@@ -2,8 +2,22 @@ import axios from 'axios';
 
 // Tarayıcının erişebileceği API URL'sini oluştur
 const getApiBaseUrl = () => {
-  // Container adı yerine window.location.hostname kullan
-  return `http://${window.location.hostname}:8000/api`;
+  // Yaygın kullanım senaryolarına göre API URL oluştur
+  const hostname = window.location.hostname;
+  
+  // Doğrudan IP adresi ile geliyorsa, aynı IP'yi kullan
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
+    return `http://${hostname}:8000/api`;
+  }
+  
+  // 'localhost' veya '127.0.0.1' gibi bir adres ise
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:8000/api';
+  }
+  
+  // Docker tarafından çözümlenebilen 'backend' adı (tarayıcıda çalışmaz)
+  // Tarayıcıda çalışabilmesi için gerçek hostname/IP kullanılmalı
+  return `http://${hostname}:8000/api`;
 };
 
 // Axios instance oluştur
@@ -14,6 +28,9 @@ const api = axios.create({
     'Content-Type': 'application/json',
   }
 });
+
+// Debug için API URL'i konsola yaz
+console.log('API URL:', getApiBaseUrl());
 
 // İstek interceptor - tüm isteklere JWT token ekler
 api.interceptors.request.use(
@@ -41,6 +58,7 @@ api.interceptors.response.use(
       // localStorage.removeItem('user');
       // window.location.href = '/login';
     }
+    console.error('API Hatası:', error.message, error.config?.url);
     return Promise.reject(error);
   }
 );

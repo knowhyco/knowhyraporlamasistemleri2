@@ -39,8 +39,13 @@ except Exception as e:
 # Uygulama ve Socket.IO başlatma
 app = Flask(__name__)
 
-# CORS yapılandırması - Tüm kaynaklardan gelen isteklere izin ver
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+# CORS yapılandırması - Belirli kaynaklardan gelen isteklere izin ver
+CORS(app, resources={r"/api/*": {"origins": [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://100.26.61.207:3000",
+    "http://frontend:3000"
+]}}, supports_credentials=True)
 
 # socketio = SocketIO(app, cors_allowed_origins="*")
 

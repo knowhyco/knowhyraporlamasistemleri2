@@ -6,10 +6,10 @@ import {
 } from '@mui/material';
 import { 
   AdminPanelSettings, Storage, Dashboard, Check, 
-  Error, ArrowBack, ArrowForward
+  Fingerprint, ArrowBack, ArrowForward
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api, { getApiBaseUrl } from '../services/apiConfig';
 
 const SetupPage = () => {
   const [activeStep, setActiveStep] = useState(0);
@@ -19,6 +19,7 @@ const SetupPage = () => {
   const [setupComplete, setSetupComplete] = useState(false);
   
   // Form alanları
+  const [systemId, setSystemId] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -28,6 +29,7 @@ const SetupPage = () => {
   const navigate = useNavigate();
   
   const steps = [
+    'Sistem ID Belirleme',
     'Admin Kullanıcısı Oluştur',
     'Veritabanı Tablosu Seç',
     'Raporları Seç',
@@ -45,17 +47,14 @@ const SetupPage = () => {
     
     setToken(storedToken);
     
-    // İsteğe bağlı: Kurulumun tamamlanmış olup olmadığını kontrol et
-    checkSetupStatus(storedToken);
+    // Kurulumun tamamlanmış olup olmadığını kontrol et
+    checkSetupStatus();
   }, [navigate]);
   
   // Kurulum durumunu kontrol et
-  const checkSetupStatus = async (token) => {
+  const checkSetupStatus = async () => {
     try {
-      // İsteğe bağlı bir kontroldür, API'de böyle bir endpoint olmayabilir
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/admin/setup-status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/admin/setup-status');
       
       if (response.data.is_completed) {
         setSetupComplete(true);
@@ -80,15 +79,15 @@ const SetupPage = () => {
         return;
       }
       
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/admin/setup`,
+      const response = await api.post(
+        '/admin/setup',
         {
+          system_id: systemId,
           admin_username: adminUsername,
           admin_password: adminPassword,
           table_name: tableName,
           selected_reports: Object.keys(reportSelections).filter(key => reportSelections[key])
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+        }
       );
       
       if (response.data.status === 'success') {
@@ -119,7 +118,7 @@ const SetupPage = () => {
   const [availableReports, setAvailableReports] = useState([]);
   
   useEffect(() => {
-    if (activeStep === 2 && token) {
+    if (activeStep === 3 && token) {
       fetchAvailableReports();
     }
   }, [activeStep, token]);
@@ -128,9 +127,7 @@ const SetupPage = () => {
     try {
       setLoading(true);
       
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/reports/list`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/reports/list');
       
       const reports = response.data.reports || [];
       setAvailableReports(reports);
@@ -154,15 +151,18 @@ const SetupPage = () => {
   const validateCurrentStep = () => {
     switch (activeStep) {
       case 0:
+        // Sistem ID doğrulama (alfanumerik ve en az 4 karakter)
+        return systemId.trim().length >= 4 && /^[a-zA-Z0-9]+$/.test(systemId);
+      case 1:
         return (
           adminUsername.trim() !== '' && 
           adminPassword.trim() !== '' && 
           confirmPassword.trim() !== '' &&
           adminPassword === confirmPassword
         );
-      case 1:
-        return tableName.trim() !== '';
       case 2:
+        return tableName.trim() !== '';
+      case 3:
         return Object.values(reportSelections).some(selected => selected);
       default:
         return true;
@@ -188,7 +188,40 @@ const SetupPage = () => {
     switch (step) {
       case 0:
         return (
-          <Box>
+          <Box component="form" noValidate autoComplete="off">
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              <Fingerprint sx={{ mr: 1 }} />
+              Sistem ID Belirleme
+            </Typography>
+            <Typography variant="body2" color="text.secondary" paragraph>
+              Sisteminiz için benzersiz bir ID belirleyin. Bu ID, veritabanında oluşturulacak tablolar için kullanılacaktır.
+              Farklı sunucularda kurulum yapıyorsanız, farklı ID'ler kullanmanız önerilir.
+            </Typography>
+            
+            <TextField
+              label="Sistem ID"
+              variant="outlined"
+              fullWidth
+              margin="normal"
+              value={systemId}
+              onChange={(e) => setSystemId(e.target.value)}
+              helperText="En az 4 karakter, sadece harf ve rakam kullanabilirsiniz (ör. abc123, kurum01)"
+              error={systemId.trim() !== '' && (systemId.length < 4 || !/^[a-zA-Z0-9]+$/.test(systemId))}
+              required
+            />
+            
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Önemli:</strong> Bu ID sistem genelinde kullanılacaktır ve değiştirilemez. 
+                Lütfen hatırlaması kolay bir ID seçin ve not alın.
+              </Typography>
+            </Alert>
+          </Box>
+        );
+      
+      case 1:
+        return (
+          <Box component="form" noValidate autoComplete="off">
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
               <AdminPanelSettings sx={{ mr: 1 }} />
               Admin Bilgileri
@@ -233,7 +266,7 @@ const SetupPage = () => {
           </Box>
         );
       
-      case 1:
+      case 2:
         return (
           <Box>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -263,7 +296,7 @@ const SetupPage = () => {
           </Box>
         );
       
-      case 2:
+      case 3:
         return (
           <Box>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -303,7 +336,7 @@ const SetupPage = () => {
           </Box>
         );
       
-      case 3:
+      case 4:
         return (
           <Box>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -315,6 +348,9 @@ const SetupPage = () => {
             </Typography>
             
             <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ mb: 1 }}>
+                <strong>Sistem ID:</strong> {systemId}
+              </Typography>
               <Typography variant="body2" sx={{ mb: 1 }}>
                 <strong>Admin Kullanıcı Adı:</strong> {adminUsername}
               </Typography>

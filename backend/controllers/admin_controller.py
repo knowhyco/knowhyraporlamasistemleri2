@@ -9,8 +9,8 @@ import json
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.db import execute_query, is_setup_done, check_table_exists
 from config import (
-    JWT_SECRET, JWT_EXPIRATION, SYSTEM_TABLE_PREFIX,
-    DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD
+    JWT_SECRET, JWT_EXPIRATION, SYSTEM_TABLE_PREFIX, SYSTEM_ID,
+    DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD, update_system_id
 )
 
 admin_bp = Blueprint('admin', __name__)
@@ -53,16 +53,32 @@ def setup():
         data = request.get_json()
         
         # Gerekli alanları kontrol et
-        required_fields = ['admin_username', 'admin_password', 'table_name']
+        required_fields = ['admin_username', 'admin_password', 'table_name', 'system_id']
         if not all(field in data for field in required_fields):
             return jsonify({
                 'status': 'error', 
-                'message': 'Eksik alanlar: admin_username, admin_password, table_name gerekli'
+                'message': 'Eksik alanlar: admin_username, admin_password, table_name, system_id gerekli'
             }), 400
             
         admin_username = data['admin_username']
         admin_password = data['admin_password']
         table_name = data['table_name']
+        system_id = data['system_id']
+        
+        # Sistem ID formatını kontrol et (sadece alfanumerik ve en az 4 karakter olmalı)
+        if not system_id.isalnum() or len(system_id) < 4:
+            return jsonify({
+                'status': 'error',
+                'message': 'Sistem ID en az 4 karakter uzunluğunda olmalı ve sadece harf ve rakamlardan oluşmalıdır'
+            }), 400
+            
+        # Sistem ID'sini güncelle
+        update_success = update_system_id(system_id)
+        if not update_success:
+            return jsonify({
+                'status': 'error',
+                'message': 'Sistem ID güncellenirken bir hata oluştu'
+            }), 500
         
         # Şifreyi hashle
         salt = bcrypt.gensalt()
@@ -137,6 +153,14 @@ def setup():
         DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
         """, (table_name,), commit=True)
         
+        # Sistem ID'sini kaydet
+        execute_query(f"""
+        INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
+        VALUES ('SYSTEM_ID', %s)
+        ON CONFLICT (config_key) 
+        DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
+        """, (system_id,), commit=True)
+        
         # Kurulum durumunu güncelle
         execute_query(f"""
         INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
@@ -154,7 +178,9 @@ def setup():
             
         return jsonify({
             'status': 'success',
-            'message': 'Kurulum başarıyla tamamlandı'
+            'message': 'Kurulum başarıyla tamamlandı',
+            'system_id': system_id,
+            'system_table_prefix': SYSTEM_TABLE_PREFIX
         })
         
     except Exception as e:
@@ -1069,4 +1095,110 @@ def manage_report(payload, report_id):
             return jsonify({
                 'status': 'error',
                 'message': f'Rapor silme sırasında hata oluştu: {str(e)}'
-            }), 500 
+            }), 500
+
+@admin_bp.route('/setup-status', methods=['GET'])
+def check_setup_status():
+    """
+    Kurulum durumunu kontrol eden endpoint
+    """
+    try:
+        setup_done = is_setup_done()
+        return jsonify({
+            'status': 'success',
+            'is_completed': setup_done
+        })
+    except Exception as e:
+        logging.error(f"Kurulum durumu kontrol hatası: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Kurulum durumu kontrolü sırasında hata oluştu: {str(e)}'
+        }), 500
+
+@admin_bp.route('/system-info', methods=['GET'])
+def get_system_info():
+    """
+    Sistem bilgilerini döndüren endpoint
+    """
+    try:
+        return jsonify({
+            'status': 'success',
+            'system_id': SYSTEM_ID,
+            'system_table_prefix': SYSTEM_TABLE_PREFIX,
+            'is_setup_done': is_setup_done()
+        })
+    except Exception as e:
+        logging.error(f"Sistem bilgileri getirme hatası: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Sistem bilgileri getirme sırasında hata oluştu: {str(e)}'
+        }), 500
+
+@admin_bp.route('/reset-system', methods=['POST'])
+@admin_required
+def reset_system(payload):
+    """
+    Sistemi sıfırlar (sadece admin kullanıcıları için)
+    Bu tehlikeli bir işlemdir ve tüm yapılandırma, kullanıcı ve log verilerini siler
+    """
+    try:
+        # İstek gövdesini kontrol et
+        data = request.get_json()
+        
+        # Güvenlik için onay kontrolü
+        confirmation = data.get('confirmation', '').strip().lower()
+        if confirmation != 'reset':
+            return jsonify({
+                'status': 'error',
+                'message': 'Onay geçersiz. Sistemi sıfırlamak için "reset" yazın'
+            }), 400
+        
+        # Eski sistem tablolarını sil
+        tables = [
+            f"{SYSTEM_TABLE_PREFIX}logs",
+            f"{SYSTEM_TABLE_PREFIX}reports",
+            f"{SYSTEM_TABLE_PREFIX}users",
+            f"{SYSTEM_TABLE_PREFIX}config"
+        ]
+        
+        for table in tables:
+            try:
+                query = f"DROP TABLE IF EXISTS {table} CASCADE"
+                execute_query(query, commit=True)
+                logging.info(f"Tablo silindi: {table}")
+            except Exception as e:
+                logging.error(f"Tablo silinemedi {table}: {e}")
+        
+        # .env dosyasında SYSTEM_ID'yi sil veya sıfırla
+        env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
+        
+        try:
+            with open(env_path, 'r') as f:
+                env_content = f.read()
+                
+            # SYSTEM_ID satırını filtrele
+            env_lines = env_content.splitlines()
+            updated_lines = []
+            for line in env_lines:
+                if not line.startswith('SYSTEM_ID='):
+                    updated_lines.append(line)
+            env_content = '\n'.join(updated_lines)
+                
+            with open(env_path, 'w') as f:
+                f.write(env_content)
+                
+            logging.info("SYSTEM_ID .env dosyasından silindi")
+        except Exception as e:
+            logging.error(f".env dosyası güncellenirken hata: {e}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Sistem başarıyla sıfırlandı. Lütfen uygulamayı yeniden başlatın.'
+        })
+        
+    except Exception as e:
+        logging.error(f"Sistem sıfırlama hatası: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Sistem sıfırlama sırasında hata oluştu: {str(e)}'
+        }), 500 
