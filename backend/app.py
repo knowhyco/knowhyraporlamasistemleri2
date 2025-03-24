@@ -3,6 +3,7 @@ from flask_cors import CORS
 # from flask_socketio import SocketIO
 import logging
 import os
+import traceback
 from config import LOG_FOLDER, SQL_SCRIPTS_FOLDER
 from utils.sql_helper import convert_md_to_sql_files
 from migrations.setup_db import run_migrations
@@ -12,9 +13,14 @@ os.makedirs(LOG_FOLDER, exist_ok=True)
 log_file = os.path.join(LOG_FOLDER, 'app.log')
 logging.basicConfig(
     filename=log_file,
-    level=logging.INFO,
+    level=logging.DEBUG,  # Daha ayrıntılı loglama için DEBUG seviyesine çıkardık
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# Hataları konsola da yazdıralım
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+logging.getLogger().addHandler(console_handler)
 
 # SQL dosyalarının yolunu kontrol et
 sql_files_dir = os.path.join(SQL_SCRIPTS_FOLDER, "sql_files")
@@ -28,6 +34,7 @@ try:
     logging.info("SQL sorgularının dönüştürülmesi tamamlandı.")
 except Exception as e:
     logging.error("SQL sorgularının dönüştürülmesi sırasında hata: %s", str(e))
+    logging.error(traceback.format_exc())
 
 # Veritabanı migration'larını çalıştır
 try:
@@ -35,6 +42,7 @@ try:
     logging.info("Veritabanı migrasyonları tamamlandı.")
 except Exception as e:
     logging.error("Veritabanı migrasyonları sırasında hata: %s", str(e))
+    logging.error(traceback.format_exc())
 
 # Uygulama ve Socket.IO başlatma
 app = Flask(__name__)
@@ -99,9 +107,11 @@ def not_found(error):
 @app.errorhandler(500)
 def server_error(error):
     logging.error(f"500 error: {error}")
+    logging.error(traceback.format_exc())
     return jsonify({
         'status': 'error',
-        'message': 'Sunucu hatası'
+        'message': 'Sunucu hatası',
+        'error_details': str(error) if app.debug else None
     }), 500
 
 # Başlat

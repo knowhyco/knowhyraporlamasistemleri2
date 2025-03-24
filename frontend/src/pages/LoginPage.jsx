@@ -24,11 +24,11 @@ const LoginPage = ({ onLogin }) => {
   const checkSetupStatus = async () => {
     try {
       // Merkezi API kullanarak doğrudan endpoint'e istek yolla
-      const response = await api.get("/system/setup-status");
-      setIsSetupMode(!response.data.is_setup_complete);
+      const response = await api.get("/admin/setup-status");
+      setIsSetupMode(!response.data.is_completed);
       
       // Eğer kurulum tamamlanmadıysa varsayılan admin bilgilerini yerleştir
-      if (!response.data.is_setup_complete) {
+      if (!response.data.is_completed) {
         setUsername('admin');
         setPassword('admin123');
       }
@@ -39,54 +39,62 @@ const LoginPage = ({ onLogin }) => {
     }
   };
   
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     
-    if (!username.trim() || !password.trim()) {
-      setError('Kullanıcı adı ve şifre gereklidir');
+    // Form doğrulama
+    if (!username || !password) {
+      setError('Kullanıcı adı ve şifre gerekli');
       return;
     }
     
     try {
       setLoading(true);
-      setError(null);
       
-      // Merkezi API yapılandırmasını kullanarak login isteği
-      const response = await api.post("/auth/login", {
-        username,
-        password
-      });
+      // Login isteği
+      const response = await api.post('/auth/login', { username, password });
       
-      if (response.data.token) {
-        // Token'ı kaydet
-        localStorage.setItem('token', response.data.token);
+      if (response.data && response.data.token) {
+        // JWT token'ı kaydet
+        const token = response.data.token;
+        localStorage.setItem('token', token);
         
         // Kullanıcı bilgilerini kaydet (varsa)
         if (response.data.user) {
           localStorage.setItem('user', JSON.stringify(response.data.user));
         }
         
-        // Login callback fonksiyonunu çağır
+        console.log('Login başarılı:', response.data);
+        
+        // onLogin callback fonksiyonu varsa çağır
         if (onLogin) {
-          onLogin(response.data.user);
+          onLogin(response.data.user, response.data.token);
         }
         
-        // Kurulum modunda ise setup sayfasına, değilse ana sayfaya yönlendir
+        // Kurulum modundaysa setup sayfasına, değilse kullanıcı rolüne göre yönlendir
         if (isSetupMode) {
           navigate('/setup');
         } else {
-          navigate('/');
+          // Kullanıcı rolüne göre yönlendirme
+          if (response.data.user && response.data.user.role === 'admin') {
+            console.log('Admin kullanıcısı için admin paneline yönlendiriliyor');
+            navigate('/admin');
+          } else {
+            console.log('Normal kullanıcı için ana sayfaya yönlendiriliyor');
+            navigate('/');
+          }
         }
       } else {
-        setError('Giriş başarısız: ' + (response.data.message || 'Bilinmeyen hata'));
+        setError('Giriş başarısız: Geçersiz yanıt');
       }
-    } catch (err) {
-      console.error('Giriş hatası:', err);
+    } catch (error) {
+      console.error('Login hatası:', error);
       
-      if (err.response && err.response.data) {
-        setError(err.response.data.message || 'Giriş başarısız');
+      // Sunucu yanıtına göre hata mesajı göster
+      if (error.response && error.response.data) {
+        setError(`Giriş başarısız: ${error.response.data.message || 'Bir hata oluştu'}`);
       } else {
-        setError('Sunucuya bağlanırken bir hata oluştu');
+        setError('Giriş başarısız: Sunucuya bağlanırken bir hata oluştu');
       }
     } finally {
       setLoading(false);

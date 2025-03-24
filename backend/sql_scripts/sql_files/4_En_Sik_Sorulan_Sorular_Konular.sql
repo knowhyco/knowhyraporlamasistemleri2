@@ -1,7 +1,7 @@
 -- 4_En_Sik_Sorulan_Sorular_Konular
 -- Parametreler:
--- {END_DATE} - End Date (örn. 2025-03-21)
--- {START_DATE} - Start Date (örn. 2025-03-14)
+-- {END_DATE} - End Date (örn. 2025-03-24)
+-- {START_DATE} - Start Date (örn. 2025-03-17)
 -- {TABLE_NAME} - Table Name (örn. customer_denizmuzesi)
 -- {TOPIC_CASE_EXPRESSION} - Topic Case Expression (örn. CASE WHEN LOWER(content) LIKE '%saat%' THEN 'Çalışma Saatleri' ELSE 'Diğer' END)
 

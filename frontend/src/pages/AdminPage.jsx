@@ -12,7 +12,7 @@ import {
   Save
 } from '@mui/icons-material';
 import { Route, Routes, useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import api from '../services/apiConfig';
 
 // Kullanıcı Yönetimi Bileşeni
 const UserManagement = () => {
@@ -35,10 +35,7 @@ const UserManagement = () => {
       setLoading(true);
       setError(null);
       
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/admin/users`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/admin/users');
       
       setUsers(response.data.users || []);
     } catch (err) {
@@ -97,60 +94,64 @@ const UserManagement = () => {
   // Kullanıcı kaydet
   const handleSaveUser = async () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
+      setSubmitting(true);
+      setError(null);
       
       if (currentUser) {
         // Mevcut kullanıcıyı güncelle
         const updateData = { ...formValues };
-        if (!updateData.password) {
-          delete updateData.password; // Şifre boşsa güncelleme verisinden çıkar
+        
+        if (!updateData.password || updateData.password.trim() === '') {
+          // Şifre boş ise, güncelleme isteğinden çıkar
+          delete updateData.password;
         }
         
-        await axios.put(
-          `${process.env.REACT_APP_API_URL}/admin/users/${currentUser.id}`,
-          updateData,
-          { headers: { Authorization: `Bearer ${token}` } }
+        await api.put(
+          `/admin/users/${currentUser.id}`,
+          updateData
         );
       } else {
         // Yeni kullanıcı oluştur
-        await axios.post(
-          `${process.env.REACT_APP_API_URL}/admin/users`,
-          formValues,
-          { headers: { Authorization: `Bearer ${token}` } }
+        await api.post(
+          `/admin/users`,
+          formValues
         );
       }
       
-      // Dialog'u kapat ve kullanıcıları yeniden getir
-      handleCloseDialog();
+      // Kullanıcı listesini güncelle
       fetchUsers();
+      
+      // Dialog'u kapat
+      handleCloseDialog();
+      
     } catch (err) {
       console.error('Kullanıcı kaydetme hatası:', err);
-      setError('Kullanıcı kaydedilirken bir hata oluştu');
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('Kullanıcı kaydedilirken bir hata oluştu');
+      }
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   // Kullanıcı durumunu değiştir (aktif/pasif)
   const handleToggleUserStatus = async (user) => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
+      setError(null);
       
-      await axios.put(
-        `${process.env.REACT_APP_API_URL}/admin/users/${user.id}`,
-        { is_active: !user.is_active },
-        { headers: { Authorization: `Bearer ${token}` } }
+      await api.put(
+        `/admin/users/${user.id}`,
+        { is_active: !user.is_active }
       );
       
-      // Kullanıcıları yeniden getir
+      // Listeyi yenile
       fetchUsers();
+      
     } catch (err) {
-      console.error('Kullanıcı durum değiştirme hatası:', err);
+      console.error('Kullanıcı durumu değiştirme hatası:', err);
       setError('Kullanıcı durumu değiştirilirken bir hata oluştu');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -343,15 +344,10 @@ const TableSettings = () => {
       setLoading(true);
       setError(null);
       
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/admin/config/table-name`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/admin/config/table-name');
       
-      if (response.data.status === 'success') {
-        setTableName(response.data.table_name || '');
-      } else {
-        setError(response.data.message || 'Tablo adı alınamadı');
+      if (response.data && response.data.table_name) {
+        setTableName(response.data.table_name);
       }
     } catch (err) {
       console.error('Tablo adı getirme hatası:', err);
@@ -369,30 +365,29 @@ const TableSettings = () => {
   // Tablo adını kaydet
   const handleSaveTableName = async () => {
     try {
-      setLoading(true);
+      setSubmitting(true);
       setError(null);
-      setSuccess(null);
       
-      const token = localStorage.getItem('token');
-      const response = await axios.put(
-        `${process.env.REACT_APP_API_URL}/admin/config/table-name`,
-        { table_name: tableName.trim() },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await api.put(
+        '/admin/config/table-name',
+        { table_name: tableName.trim() }
       );
       
-      if (response.data.status === 'success') {
-        setSuccess('Tablo adı başarıyla kaydedildi');
-        fetchTableName(); // Güncel adı getir
-      } else if (response.data.status === 'warning') {
-        setSuccess('Tablo adı kaydedildi, ancak tablo bulunamadı. Raporlar çalışmayabilir.');
+      if (response.data && response.data.status === 'success') {
+        setSuccess('Tablo adı başarıyla güncellendi');
+        setTimeout(() => setSuccess(null), 3000);
       } else {
-        setError(response.data.message || 'Tablo adı kaydedilemedi');
+        setError('Tablo adı güncellenirken bir hata oluştu');
       }
     } catch (err) {
       console.error('Tablo adı kaydetme hatası:', err);
-      setError('Tablo adı kaydedilirken bir hata oluştu');
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('Tablo adı kaydedilirken bir hata oluştu');
+      }
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -458,16 +453,9 @@ const ReportManagement = () => {
       setLoading(true);
       setError(null);
       
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/reports/list`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/reports/list');
       
-      if (response.data.status === 'success') {
-        setReports(response.data.reports || []);
-      } else {
-        setError(response.data.message || 'Rapor listesi alınamadı');
-      }
+      setReports(response.data.reports || []);
     } catch (err) {
       console.error('Rapor listesi getirme hatası:', err);
       setError('Rapor listesi yüklenirken bir hata oluştu');
@@ -481,63 +469,58 @@ const ReportManagement = () => {
     fetchReports();
   }, []);
 
-  // Raporu kaydet
+  // Raporu sisteme ekle
   const handleRegisterReport = async (report) => {
     try {
-      setLoading(true);
+      setSubmitting(true);
       setError(null);
-      setSuccess(null);
       
-      const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/reports/register`,
+      const response = await api.post(
+        '/reports/register',
         {
           report_name: report.report_name,
           display_name: report.display_name,
-          description: report.description
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+          description: report.description,
+          category: report.category,
+          parameters: report.parameters
+        }
       );
       
-      if (response.data.status === 'success') {
-        setSuccess(`'${report.display_name}' raporu başarıyla kaydedildi`);
-        fetchReports(); // Güncel rapor listesini getir
-      } else {
-        setError(response.data.message || 'Rapor kaydedilemedi');
+      if (response.data && response.data.status === 'success') {
+        // Rapor listesini güncelle
+        fetchReports();
+        setSuccess(`"${report.display_name}" raporu başarıyla eklendi`);
+        setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err) {
-      console.error('Rapor kaydetme hatası:', err);
-      setError('Rapor kaydedilirken bir hata oluştu');
+      console.error('Rapor eklerken hata:', err);
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError('Rapor eklenirken bir hata oluştu');
+      }
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
   // Rapor durumunu değiştir (aktif/pasif)
   const handleToggleReportStatus = async (report) => {
     try {
-      setLoading(true);
       setError(null);
-      setSuccess(null);
       
-      const token = localStorage.getItem('token');
-      const response = await axios.put(
-        `${process.env.REACT_APP_API_URL}/reports/toggle-active/${report.id}`,
-        { is_active: !report.is_active },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await api.put(
+        `/reports/toggle-active/${report.id}`,
+        { is_active: !report.is_active }
       );
       
-      if (response.data.status === 'success') {
-        setSuccess(`'${report.display_name}' raporu ${!report.is_active ? 'aktif' : 'pasif'} duruma getirildi`);
-        fetchReports(); // Güncel rapor listesini getir
-      } else {
-        setError(response.data.message || 'Rapor durumu değiştirilemedi');
+      if (response.data && response.data.status === 'success') {
+        // Listeyi yenile
+        fetchReports();
       }
     } catch (err) {
       console.error('Rapor durumu değiştirme hatası:', err);
       setError('Rapor durumu değiştirilirken bir hata oluştu');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -650,18 +633,12 @@ const LogViewer = () => {
       setLoading(true);
       setError(null);
       
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/admin/logs`, {
-        params: { offset: page * logsPerPage, limit: logsPerPage },
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await api.get('/admin/logs', {
+        params: { offset: page * logsPerPage, limit: logsPerPage }
       });
       
-      if (response.data.status === 'success') {
-        setLogs(response.data.logs || []);
-        setTotalLogs(response.data.total || 0);
-      } else {
-        setError(response.data.message || 'Log listesi alınamadı');
-      }
+      setLogs(response.data.logs || []);
+      setTotalLogs(response.data.total_count || 0);
     } catch (err) {
       console.error('Log getirme hatası:', err);
       setError('Loglar yüklenirken bir hata oluştu');

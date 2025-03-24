@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import axios from 'axios';
+import jwt_decode from 'jwt-decode';
 
 // Sayfalar
 import LoginPage from './pages/LoginPage';
@@ -73,42 +74,82 @@ function App() {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
     
-    if (storedToken && storedUser) {
+    if (storedToken) {
       try {
-        setUser(JSON.parse(storedUser));
+        // JWT token'dan kullanıcı bilgilerini çıkar
+        const tokenData = jwt_decode(storedToken);
+        
+        // Saklanmış kullanıcı bilgilerini de kontrol et
+        let userData = null;
+        if (storedUser) {
+          try {
+            userData = JSON.parse(storedUser);
+          } catch (error) {
+            console.error('Kullanıcı bilgileri çözümlenirken hata oluştu:', error);
+            localStorage.removeItem('user');
+          }
+        }
+        
+        // Token verisinden kullanıcı bilgilerini güncelle veya oluştur
+        // JWT'deki 'role' bilgisini öncelikli kullan
+        const mergedUser = {
+          ...userData,
+          id: tokenData.sub,
+          username: tokenData.username,
+          role: tokenData.role // JWT'deki rol bilgisini kullan
+        };
+        
+        console.log('JWT token data:', tokenData);
+        console.log('Merged user data:', mergedUser);
+        
+        setUser(mergedUser);
+        
+        // LocalStorage'daki kullanıcı bilgilerini güncelle
+        localStorage.setItem('user', JSON.stringify(mergedUser));
       } catch (error) {
-        console.error('Kullanıcı bilgileri çözümlenirken hata oluştu:', error);
-        // Hatalı veri varsa temizle
-        localStorage.removeItem('user');
+        console.error('Token çözümlenirken hata oluştu:', error);
+        // Hatalı token varsa temizle
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
       }
+    } else {
+      // Token yoksa kullanıcı verisini de temizle
+      localStorage.removeItem('user');
     }
     
     setLoading(false);
   }, []);
 
-  // Giriş işlemi
-  const handleLogin = (userData) => {
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
+  const handleLogin = (user, token) => {
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+    setUser(user);
   };
 
-  // Çıkış işlemi
   const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
   };
 
   // Özel rota bileşeni (yetkilendirme kontrolü)
   const PrivateRoute = ({ element, requiredRole }) => {
     // Kullanıcı girişi yoksa login sayfasına yönlendir
+    if (loading) {
+      return <div>Yükleniyor...</div>;
+    }
+    
     if (!user) {
       return <Navigate to="/login" replace />;
     }
     
+    // Debugging için rol bilgilerini logla
+    console.log('PrivateRoute - User:', user);
+    console.log('PrivateRoute - Required Role:', requiredRole);
+    
     // Rol kontrolü varsa ve kullanıcının gerekli rolü yoksa ana sayfaya yönlendir
     if (requiredRole && user.role !== requiredRole) {
+      console.log(`Role mismatch: User role is ${user.role}, required role is ${requiredRole}`);
       return <Navigate to="/" replace />;
     }
     

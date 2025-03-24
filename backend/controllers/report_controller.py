@@ -3,9 +3,10 @@ import logging
 import os
 import sys
 import re
+import traceback
 from flask_socketio import emit
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.db import execute_query, is_setup_done
+from utils.db import execute_query, is_setup_done, check_table_exists
 from utils.sql_helper import (
     read_sql_file, extract_parameters, replace_placeholders, 
     get_default_parameter_value, get_sql_file_path
@@ -19,62 +20,86 @@ report_bp = Blueprint('report', __name__)
 from controllers.user_controller import auth_required, get_token_payload
 
 @report_bp.route('/list', methods=['GET'])
-@auth_required
-def get_reports(payload):
+def get_reports():
     """
     Sistemdeki raporları listeler
+    
+    Not: Bu endpoint hem auth_required hem de direkt erişime izin verir.
+    Kurulum sırasında token olmadan çağrılabilir.
     """
     try:
-        # Veritabanından tanımlı raporları getir
-        query = f"""
-        SELECT id, report_name, display_name, description, parameters, is_active
-        FROM {SYSTEM_TABLE_PREFIX}reports
-        ORDER BY display_name
-        """
-        db_reports = execute_query(query)
+        # Kurulum tamamlanmamışsa sadece SQL dosyalarından raporları dön
+        setup_done = is_setup_done()
+        db_reports = []
+        
+        # Kurulum tamamlanmışsa veritabanından raporları getir
+        if setup_done:
+            try:
+                logging.debug("Kurulum tamamlanmış, DB'den raporlar alınıyor")
+                query = f"""
+                SELECT id, report_name, display_name, description, parameters, is_active
+                FROM {SYSTEM_TABLE_PREFIX}reports
+                ORDER BY display_name
+                """
+                db_reports = execute_query(query)
+                logging.debug(f"Veritabanından {len(db_reports)} rapor alındı")
+            except Exception as e:
+                logging.error(f"Veritabanı raporları alınırken hata: {e}")
+                logging.error(traceback.format_exc())
+                # Hata durumunda SQL dosyalarıyla devam et
+                db_reports = []
+        else:
+            logging.info("Kurulum tamamlanmamış, SQL dosyalarından raporlar alınıyor")
         
         # SQL script dosyalarından raporları bul
         file_reports = []
         
-        for file in os.listdir(SQL_SCRIPTS_FOLDER):
-            if file.endswith('.md'):
-                report_name = file[:-3]  # .md uzantısını kaldır
-                
-                # Bu rapor zaten veritabanında tanımlı mı kontrol et
-                if not any(r['report_name'] == report_name for r in db_reports):
-                    try:
-                        # Dosyadan SQL sorgusunu oku
-                        sql_query = read_sql_file(report_name)
+        try:
+            if os.path.exists(SQL_SCRIPTS_FOLDER):
+                for file in os.listdir(SQL_SCRIPTS_FOLDER):
+                    if file.endswith('.md'):
+                        report_name = file[:-3]  # .md uzantısını kaldır
                         
-                        # Markdown dosyasından başlık ve açıklamayı çıkarmaya çalış
-                        with open(os.path.join(SQL_SCRIPTS_FOLDER, file), 'r', encoding='utf-8') as f:
-                            content = f.read()
-                        
-                        # Başlık (ilk satır)
-                        title_match = re.search(r'^# (.*?)$', content, re.MULTILINE)
-                        display_name = title_match.group(1) if title_match else report_name
-                        
-                        # Açıklama (ikinci satır)
-                        desc_match = re.search(r'^# .*?\n(.*?)(?=\n```|\n#|$)', content, re.DOTALL)
-                        description = desc_match.group(1).strip() if desc_match else ""
-                        
-                        # Parametreleri çıkar
-                        params = extract_parameters(sql_query)
-                        parameters = {}
-                        for param in params:
-                            parameters[param] = get_default_parameter_value(param)
-                        
-                        file_reports.append({
-                            'id': None,
-                            'report_name': report_name,
-                            'display_name': display_name,
-                            'description': description,
-                            'parameters': parameters,
-                            'is_active': True,
-                            'is_registered': False
-                        })
-                    except Exception as e:
-                        logging.error(f"Dosya okuma hatası ({file}): {e}")
+                        # Bu rapor zaten veritabanında tanımlı mı kontrol et
+                        if not any(r['report_name'] == report_name for r in db_reports):
+                            try:
+                                # Dosyadan SQL sorgusunu oku
+                                sql_query = read_sql_file(report_name)
+                                
+                                # Markdown dosyasından başlık ve açıklamayı çıkarmaya çalış
+                                with open(os.path.join(SQL_SCRIPTS_FOLDER, file), 'r', encoding='utf-8') as f:
+                                    content = f.read()
+                                
+                                # Başlık (ilk satır)
+                                title_match = re.search(r'^# (.*?)$', content, re.MULTILINE)
+                                display_name = title_match.group(1) if title_match else report_name
+                                
+                                # Açıklama (ikinci satır)
+                                desc_match = re.search(r'^# .*?\n(.*?)(?=\n```|\n#|$)', content, re.DOTALL)
+                                description = desc_match.group(1).strip() if desc_match else ""
+                                
+                                # Parametreleri çıkar
+                                params = extract_parameters(sql_query)
+                                parameters = {}
+                                for param in params:
+                                    parameters[param] = get_default_parameter_value(param)
+                                
+                                file_reports.append({
+                                    'id': None,
+                                    'report_name': report_name,
+                                    'display_name': display_name,
+                                    'description': description,
+                                    'parameters': parameters,
+                                    'is_active': True,
+                                    'is_registered': False
+                                })
+                            except Exception as e:
+                                logging.error(f"Dosya okuma hatası ({file}): {e}")
+            else:
+                logging.warning(f"SQL_SCRIPTS_FOLDER yolu bulunamadı: {SQL_SCRIPTS_FOLDER}")
+        except Exception as e:
+            logging.error(f"SQL dosyalarını okurken hata: {e}")
+            logging.error(traceback.format_exc())
         
         # Veritabanı raporlarını formatlama
         formatted_db_reports = []
@@ -102,17 +127,24 @@ def get_reports(payload):
         all_reports = formatted_db_reports + file_reports
         all_reports.sort(key=lambda x: x['display_name'])
         
+        logging.info(f"Toplam {len(all_reports)} rapor listelendi")
         return jsonify({
             'status': 'success',
-            'reports': all_reports
+            'reports': all_reports,
+            'setup_complete': setup_done
         })
         
     except Exception as e:
         logging.error(f"Rapor listeleme hatası: {e}")
+        logging.error(traceback.format_exc())
+        
+        # Hata durumunda boş liste dön, hata dönme
         return jsonify({
-            'status': 'error',
-            'message': f'Rapor listeleme sırasında hata oluştu: {str(e)}'
-        }), 500
+            'status': 'success',
+            'reports': [],
+            'setup_complete': False,
+            'warning': f'Rapor listeleme sırasında hata oluştu: {str(e)}'
+        })
 
 @report_bp.route('/register', methods=['POST'])
 @auth_required

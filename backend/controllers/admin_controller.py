@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import sys
 import os
 import json
+import traceback
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.db import execute_query, is_setup_done, check_table_exists
 from config import (
@@ -19,13 +20,13 @@ def get_token_payload(request):
     """JWT token'dan payload bilgisini çıkarır"""
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
+        logging.warning("Authorization header eksik veya geçersiz format")
         return None
     
     token = auth_header.split(' ')[1]
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
-        if payload.get('role') != 'admin':
-            return None
+        logging.debug(f"Token çözümlendi: {payload}")
         return payload
     except Exception as e:
         logging.error(f"Token çözme hatası: {e}")
@@ -35,8 +36,22 @@ def admin_required(func):
     """Admin yetkisi gerektiren endpoint'ler için decorator"""
     def wrapper(*args, **kwargs):
         payload = get_token_payload(request)
+        logging.info(f"Admin required check - Token payload: {payload}")
+        
         if not payload:
-            return jsonify({'status': 'error', 'message': 'Yetkisiz erişim'}), 401
+            logging.warning("Token doğrulanamadı veya bulunamadı")
+            return jsonify({'status': 'error', 'message': 'Yetkisiz erişim - Token geçersiz'}), 401
+            
+        # Token'da rol kontrolü
+        if 'role' not in payload:
+            logging.warning(f"Token'da rol bilgisi yok: {payload}")
+            return jsonify({'status': 'error', 'message': 'Yetkisiz erişim - Rol bilgisi bulunamadı'}), 401
+            
+        if payload['role'] != 'admin':
+            logging.warning(f"Admin rolü gerekli, kullanıcı rolü: {payload['role']}")
+            return jsonify({'status': 'error', 'message': 'Yetkisiz erişim - Admin yetkisi gerekli'}), 403
+            
+        logging.info(f"Admin yetkilendirmesi başarılı: {payload['username']}")
         return func(payload, *args, **kwargs)
     wrapper.__name__ = func.__name__
     return wrapper
@@ -46,18 +61,23 @@ def setup():
     """
     Sistem ilk kurulumu için endpoint
     """
+    logging.info("Setup endpoint'i çağrıldı")
     if is_setup_done():
+        logging.warning("Kurulum zaten tamamlanmış, yeni kurulum isteği reddedildi")
         return jsonify({'status': 'error', 'message': 'Kurulum zaten tamamlanmış'}), 400
         
     try:
         data = request.get_json()
+        logging.debug(f"Setup isteği verileri: {data}")
         
         # Gerekli alanları kontrol et
         required_fields = ['admin_username', 'admin_password', 'table_name', 'system_id']
         if not all(field in data for field in required_fields):
+            missing_fields = [field for field in required_fields if field not in data]
+            logging.warning(f"Eksik alanlar: {missing_fields}")
             return jsonify({
                 'status': 'error', 
-                'message': 'Eksik alanlar: admin_username, admin_password, table_name, system_id gerekli'
+                'message': f'Eksik alanlar: {", ".join(missing_fields)} gerekli'
             }), 400
             
         admin_username = data['admin_username']
@@ -65,16 +85,21 @@ def setup():
         table_name = data['table_name']
         system_id = data['system_id']
         
+        logging.info(f"Kurulum verileri alındı: admin_username={admin_username}, table_name={table_name}, system_id={system_id}")
+        
         # Sistem ID formatını kontrol et (sadece alfanumerik ve en az 4 karakter olmalı)
         if not system_id.isalnum() or len(system_id) < 4:
+            logging.warning(f"Geçersiz system_id formatı: {system_id}")
             return jsonify({
                 'status': 'error',
                 'message': 'Sistem ID en az 4 karakter uzunluğunda olmalı ve sadece harf ve rakamlardan oluşmalıdır'
             }), 400
             
         # Sistem ID'sini güncelle
+        logging.info(f"Sistem ID güncelleniyor: {system_id}")
         update_success = update_system_id(system_id)
         if not update_success:
+            logging.error(f"Sistem ID güncellenemedi: {system_id}")
             return jsonify({
                 'status': 'error',
                 'message': 'Sistem ID güncellenirken bir hata oluştu'
@@ -84,98 +109,183 @@ def setup():
         salt = bcrypt.gensalt()
         hashed_password = bcrypt.hashpw(admin_password.encode('utf-8'), salt).decode('utf-8')
         
+        # Güncel sistem tabloları prefix'ini kullanmak için değişkeni yeniden alalım
+        from config import SYSTEM_TABLE_PREFIX
+        logging.info(f"Güncel SYSTEM_TABLE_PREFIX: {SYSTEM_TABLE_PREFIX}")
+        
         # Sistem tablolarını oluştur
+        logging.info("Sistem tabloları oluşturuluyor...")
+        
         # 1. Kullanıcılar tablosu
-        execute_query(f"""
-        CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}users (
-            id SERIAL PRIMARY KEY,
-            username VARCHAR(100) UNIQUE NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            email VARCHAR(255),
-            role VARCHAR(20) NOT NULL DEFAULT 'user',
-            is_active BOOLEAN NOT NULL DEFAULT true,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP
-        )
-        """, commit=True)
+        try:
+            logging.debug(f"Kullanıcılar tablosu oluşturuluyor: {SYSTEM_TABLE_PREFIX}users")
+            execute_query(f"""
+            CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(100) UNIQUE NOT NULL,
+                password VARCHAR(255) NOT NULL,
+                email VARCHAR(255),
+                role VARCHAR(20) NOT NULL DEFAULT 'user',
+                is_active BOOLEAN NOT NULL DEFAULT true,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
+            )
+            """, commit=True)
+            logging.info("Kullanıcılar tablosu oluşturuldu")
+        except Exception as e:
+            logging.error(f"Kullanıcılar tablosu oluşturma hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # 2. Konfigürasyon tablosu
-        execute_query(f"""
-        CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}config (
-            id SERIAL PRIMARY KEY,
-            config_key VARCHAR(100) UNIQUE NOT NULL,
-            config_value TEXT,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """, commit=True)
+        try:
+            logging.debug(f"Konfigürasyon tablosu oluşturuluyor: {SYSTEM_TABLE_PREFIX}config")
+            execute_query(f"""
+            CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}config (
+                id SERIAL PRIMARY KEY,
+                config_key VARCHAR(100) UNIQUE NOT NULL,
+                config_value TEXT,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """, commit=True)
+            logging.info("Konfigürasyon tablosu oluşturuldu")
+        except Exception as e:
+            logging.error(f"Konfigürasyon tablosu oluşturma hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # 3. Raporlar tablosu
-        execute_query(f"""
-        CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}reports (
-            id SERIAL PRIMARY KEY,
-            report_name VARCHAR(100) UNIQUE NOT NULL,
-            display_name VARCHAR(255) NOT NULL,
-            description TEXT,
-            parameters JSONB,
-            is_active BOOLEAN NOT NULL DEFAULT true,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-        """, commit=True)
+        try:
+            logging.debug(f"Raporlar tablosu oluşturuluyor: {SYSTEM_TABLE_PREFIX}reports")
+            execute_query(f"""
+            CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}reports (
+                id SERIAL PRIMARY KEY,
+                report_name VARCHAR(100) UNIQUE NOT NULL,
+                display_name VARCHAR(255) NOT NULL,
+                description TEXT,
+                parameters JSONB,
+                is_active BOOLEAN NOT NULL DEFAULT true,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """, commit=True)
+            logging.info("Raporlar tablosu oluşturuldu")
+        except Exception as e:
+            logging.error(f"Raporlar tablosu oluşturma hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # 4. Loglar tablosu
-        execute_query(f"""
-        CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}logs (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER,
-            action VARCHAR(100) NOT NULL,
-            details JSONB,
-            ip_address VARCHAR(50),
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES {SYSTEM_TABLE_PREFIX}users(id) ON DELETE SET NULL
-        )
-        """, commit=True)
+        try:
+            logging.debug(f"Loglar tablosu oluşturuluyor: {SYSTEM_TABLE_PREFIX}logs")
+            execute_query(f"""
+            CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}logs (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                action VARCHAR(100) NOT NULL,
+                details JSONB,
+                ip_address VARCHAR(50),
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES {SYSTEM_TABLE_PREFIX}users(id) ON DELETE SET NULL
+            )
+            """, commit=True)
+            logging.info("Loglar tablosu oluşturuldu")
+        except Exception as e:
+            logging.error(f"Loglar tablosu oluşturma hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
+        
+        # 5. Favoriler tablosu
+        try:
+            logging.debug(f"Favoriler tablosu oluşturuluyor: {SYSTEM_TABLE_PREFIX}favorites")
+            execute_query(f"""
+            CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}favorites (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                report_id INTEGER NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES {SYSTEM_TABLE_PREFIX}users(id) ON DELETE CASCADE,
+                FOREIGN KEY (report_id) REFERENCES {SYSTEM_TABLE_PREFIX}reports(id) ON DELETE CASCADE,
+                UNIQUE(user_id, report_id)
+            )
+            """, commit=True)
+            logging.info("Favoriler tablosu oluşturuldu")
+        except Exception as e:
+            logging.error(f"Favoriler tablosu oluşturma hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # Admin kullanıcısını ekle
-        execute_query(f"""
-        INSERT INTO {SYSTEM_TABLE_PREFIX}users (username, password, role)
-        VALUES (%s, %s, 'admin')
-        ON CONFLICT (username) 
-        DO UPDATE SET password = EXCLUDED.password, role = 'admin'
-        """, (admin_username, hashed_password), commit=True)
+        logging.info(f"Admin kullanıcısı ekleniyor: {admin_username}")
+        try:
+            execute_query(f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}users (username, password, role)
+            VALUES (%s, %s, 'admin')
+            ON CONFLICT (username) 
+            DO UPDATE SET password = EXCLUDED.password, role = 'admin'
+            """, (admin_username, hashed_password), commit=True)
+            logging.info("Admin kullanıcısı eklendi")
+        except Exception as e:
+            logging.error(f"Admin kullanıcısı ekleme hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # Tablo adını konfig tablosuna kaydet
-        execute_query(f"""
-        INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
-        VALUES ('TABLE_NAME', %s)
-        ON CONFLICT (config_key) 
-        DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
-        """, (table_name,), commit=True)
+        logging.info(f"Tablo adı kaydediliyor: {table_name}")
+        try:
+            execute_query(f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
+            VALUES ('TABLE_NAME', %s)
+            ON CONFLICT (config_key) 
+            DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
+            """, (table_name,), commit=True)
+            logging.info("Tablo adı kaydedildi")
+        except Exception as e:
+            logging.error(f"Tablo adı kaydetme hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # Sistem ID'sini kaydet
-        execute_query(f"""
-        INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
-        VALUES ('SYSTEM_ID', %s)
-        ON CONFLICT (config_key) 
-        DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
-        """, (system_id,), commit=True)
+        logging.info(f"Sistem ID kaydediliyor: {system_id}")
+        try:
+            execute_query(f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
+            VALUES ('SYSTEM_ID', %s)
+            ON CONFLICT (config_key) 
+            DO UPDATE SET config_value = EXCLUDED.config_value, updated_at = CURRENT_TIMESTAMP
+            """, (system_id,), commit=True)
+            logging.info("Sistem ID kaydedildi")
+        except Exception as e:
+            logging.error(f"Sistem ID kaydetme hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # Kurulum durumunu güncelle
-        execute_query(f"""
-        INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
-        VALUES ('IS_SETUP_DONE', 'TRUE')
-        ON CONFLICT (config_key) 
-        DO UPDATE SET config_value = 'TRUE', updated_at = CURRENT_TIMESTAMP
-        """, commit=True)
+        logging.info("Kurulum durumu güncelleniyor")
+        try:
+            execute_query(f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}config (config_key, config_value)
+            VALUES ('IS_SETUP_DONE', 'TRUE')
+            ON CONFLICT (config_key) 
+            DO UPDATE SET config_value = 'TRUE', updated_at = CURRENT_TIMESTAMP
+            """, commit=True)
+            logging.info("Kurulum durumu güncellendi")
+        except Exception as e:
+            logging.error(f"Kurulum durumu güncelleme hatası: {e}")
+            logging.error(traceback.format_exc())
+            raise
         
         # Rapor tablosunu kontrol et
+        logging.info(f"Tablo varlığı kontrol ediliyor: {table_name}")
         if not check_table_exists(table_name):
+            logging.warning(f"Tablo bulunamadı: {table_name}")
             return jsonify({
                 'status': 'warning',
                 'message': f"Kurulum tamamlandı fakat '{table_name}' tablosu mevcut değil. Raporlar çalışmayabilir."
             })
-            
+        
+        logging.info("Kurulum başarıyla tamamlandı")
         return jsonify({
             'status': 'success',
             'message': 'Kurulum başarıyla tamamlandı',
@@ -185,6 +295,7 @@ def setup():
         
     except Exception as e:
         logging.error(f"Kurulum hatası: {e}")
+        logging.error(traceback.format_exc())
         return jsonify({
             'status': 'error',
             'message': f'Kurulum sırasında hata oluştu: {str(e)}'
@@ -1201,4 +1312,54 @@ def reset_system(payload):
         return jsonify({
             'status': 'error',
             'message': f'Sistem sıfırlama sırasında hata oluştu: {str(e)}'
+        }), 500
+
+@admin_bp.route('/dashboard', methods=['GET'])
+@admin_required
+def admin_dashboard(payload):
+    """
+    Admin paneli için öz dashboard bilgilerini döndürür
+    Kullanıcı sayısı, rapor sayısı gibi özet veriler
+    """
+    try:
+        logging.info(f"Admin dashboard istendi: {payload['username']}")
+        
+        # Kullanıcı sayısını al
+        user_count = execute_query(f"""
+        SELECT COUNT(*) as count FROM {SYSTEM_TABLE_PREFIX}users
+        """, fetch_all=False)
+        
+        # Rapor sayısını al
+        report_count = execute_query(f"""
+        SELECT COUNT(*) as count FROM {SYSTEM_TABLE_PREFIX}reports
+        """, fetch_all=False)
+        
+        # Son loglar
+        recent_logs = execute_query(f"""
+        SELECT id, user_id, action, created_at
+        FROM {SYSTEM_TABLE_PREFIX}logs
+        ORDER BY created_at DESC
+        LIMIT 5
+        """)
+        
+        # Sistem özet bilgileri
+        system_info = {
+            'user_count': user_count['count'] if user_count else 0,
+            'report_count': report_count['count'] if report_count else 0,
+            'recent_logs': recent_logs,
+            'system_id': SYSTEM_ID,
+            'table_prefix': SYSTEM_TABLE_PREFIX
+        }
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Admin dashboard verileri alındı',
+            'data': system_info
+        })
+        
+    except Exception as e:
+        logging.error(f"Admin dashboard hatası: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Dashboard verileri alınırken hata oluştu: {str(e)}'
         }), 500 

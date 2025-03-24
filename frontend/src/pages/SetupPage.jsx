@@ -9,7 +9,7 @@ import {
   Fingerprint, ArrowBack, ArrowForward
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import api, { getApiBaseUrl } from '../services/apiConfig';
+import api, { getApiBaseUrl, longTimeoutApi } from '../services/apiConfig';
 
 const SetupPage = () => {
   const [activeStep, setActiveStep] = useState(0);
@@ -79,7 +79,7 @@ const SetupPage = () => {
         return;
       }
       
-      const response = await api.post(
+      const response = await longTimeoutApi.post(
         '/admin/setup',
         {
           system_id: systemId,
@@ -107,7 +107,7 @@ const SetupPage = () => {
       if (err.response && err.response.data) {
         setError(err.response.data.message || 'Kurulum sırasında bir hata oluştu');
       } else {
-        setError('Sunucuya bağlanırken bir hata oluştu');
+        setError('Sunucuya bağlanırken bir hata oluştu. Kurulum işlemi uzun sürebilir, lütfen sayfayı yenileyip tekrar deneyin.');
       }
     } finally {
       setLoading(false);
@@ -141,7 +141,10 @@ const SetupPage = () => {
       
     } catch (err) {
       console.error('Rapor listesi alınamadı:', err);
-      setError('Rapor listesi yüklenirken bir hata oluştu');
+      // Hata durumunda boş bir liste kullan ve devam et
+      setError('Rapor listesi yüklenemedi. Kurulum sonrasında raporları manuel ekleyebilirsiniz.');
+      setAvailableReports([]);
+      setReportSelections({});
     } finally {
       setLoading(false);
     }
