@@ -8,7 +8,7 @@ import {
   Search, BarChart, TableChart, Timeline, Description,
   Favorite, FavoriteBorder, Category
 } from '@mui/icons-material';
-import axios from 'axios';
+import { api } from '../../services/apiConfig';
 
 const ReportSelector = ({ onSelectReport }) => {
   const [reports, setReports] = useState([]);
@@ -39,10 +39,8 @@ const ReportSelector = ({ onSelectReport }) => {
     setError(null);
     
     try {
-      const response = await axios.get(
-        `${process.env.REACT_APP_API_URL}/reports/list`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      // apiConfig.js'deki api nesnesini kullan; token ve Authorization otomatik olarak eklenecek
+      const response = await api.get('/reports/list');
       
       if (response.data.status === 'success') {
         setReports(response.data.reports || []);

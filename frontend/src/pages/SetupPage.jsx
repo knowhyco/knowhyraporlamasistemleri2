@@ -9,7 +9,7 @@ import {
   Fingerprint, ArrowBack, ArrowForward
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import api, { getApiBaseUrl, longTimeoutApi } from '../services/apiConfig';
+import { api } from '../services/apiConfig';
 
 const SetupPage = () => {
   const [activeStep, setActiveStep] = useState(0);
@@ -79,7 +79,7 @@ const SetupPage = () => {
         return;
       }
       
-      const response = await longTimeoutApi.post(
+      const response = await api.post(
         '/admin/setup',
         {
           system_id: systemId,

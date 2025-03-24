@@ -1,53 +1,40 @@
 import axios from 'axios';
 
-// Tarayıcının erişebileceği API URL'sini oluştur
-const getApiBaseUrl = () => {
-  // Tarayıcının mevcut adresinden alınan hostname
-  const hostname = window.location.hostname;
-  
-  // Doğrudan IP adresi ile geliyorsa (ör: 100.26.61.207)
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(hostname)) {
-    return `http://${hostname}:8000/api`;
-  }
-  
-  // 'localhost' veya '127.0.0.1' gibi yerel bir adres ise
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'http://localhost:8000/api';
-  }
-  
-  // Diğer tüm durumlar için (domain adı vb.)
-  return `http://${hostname}:8000/api`;
-};
+// API URL'sini belirle - Docker ve tarayıcı uyumluluğu için
+function getApiBaseUrl() {
+  // Tarayıcıdan API'ye erişirken her zaman localhost kullanılmalı
+  // Docker container içinde "backend:8000" kullanılsa da, tarayıcı bu host adını çözemez
+  return 'http://localhost:8000/api';
+}
 
-// API URL'i konsola yaz (debug için)
-const apiBaseUrl = getApiBaseUrl();
-console.log('API URL:', apiBaseUrl);
+console.log('Using API URL:', getApiBaseUrl());
 
-// Axios instance oluştur (normal API istekleri için - 20 saniye timeout)
+// Create an Axios instance with default config
 const api = axios.create({
-  baseURL: apiBaseUrl,
-  timeout: 20000, // 20 saniye
+  baseURL: getApiBaseUrl(),
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
-  }
+  },
 });
 
 // Uzun süren istekler için ayrı bir instance (60 saniye timeout)
 const longTimeoutApi = axios.create({
-  baseURL: apiBaseUrl,
+  baseURL: getApiBaseUrl(),
   timeout: 60000, // 60 saniye
   headers: {
     'Content-Type': 'application/json',
   }
 });
 
-// İstek interceptor - tüm isteklere JWT token ekler
+// Add a request interceptor to include the token in every request
 const setupRequestInterceptor = (axiosInstance) => {
   axiosInstance.interceptors.request.use(
     (config) => {
+      // Get the token from localStorage
       const token = localStorage.getItem('token');
       if (token) {
-        config.headers['Authorization'] = `Bearer ${token}`;
+        config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
     },
@@ -57,21 +44,29 @@ const setupRequestInterceptor = (axiosInstance) => {
   );
 };
 
-// Yanıt interceptor - hata yönetimi için
+// Add a response interceptor to handle common errors
 const setupResponseInterceptor = (axiosInstance) => {
   axiosInstance.interceptors.response.use(
     (response) => {
       return response;
     },
     (error) => {
-      if (error.response && error.response.status === 401) {
-        // Token süresi dolmuş olabilir
-        console.warn('Yetkilendirme hatası (401). Oturum süresi dolmuş olabilir.');
-        // Aşağıdaki satırları aktif hale getirerek otomatik logout ekleyebilirsiniz
-        // localStorage.removeItem('token');
-        // window.location.href = '/login';
+      if (error.message === 'Network Error') {
+        console.error('Network error detected. API server may be unreachable.');
+        console.error('Current API URL:', getApiBaseUrl());
+        console.error('Please ensure the backend service is running at port 8000.');
       }
-      console.error('API Hatası:', error.message, error.config?.url);
+      
+      if (error.response) {
+        // Server responded with an error status
+        if (error.response.status === 401) {
+          // Token expired or invalid, clear localStorage and redirect to login
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
+      }
+      
       return Promise.reject(error);
     }
   );
@@ -83,5 +78,6 @@ setupResponseInterceptor(api);
 setupRequestInterceptor(longTimeoutApi);
 setupResponseInterceptor(longTimeoutApi);
 
-export default api;
-export { getApiBaseUrl, longTimeoutApi }; 
+// Hem named export hem de default export sağla
+export { api, getApiBaseUrl, longTimeoutApi };
+export default api; 

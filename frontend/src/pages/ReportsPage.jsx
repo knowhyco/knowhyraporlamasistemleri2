@@ -10,7 +10,7 @@ import {
   TableChart, CalendarToday, ViewList, Assessment
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../services/apiConfig';
 import ReportSelector from '../components/Reports/ReportSelector';
 import ReportViewer from '../components/Reports/ReportViewer';
 
@@ -27,22 +27,25 @@ const ReportsPage = () => {
   const [tabValue, setTabValue] = useState(0);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
+  const [summaryError, setSummaryError] = useState(null);
   
   const navigate = useNavigate();
   
   // Rapor kategorileri
-  const categories = [
-    { value: 'all', label: 'Tüm Raporlar' },
-    { value: 'time', label: 'Zaman Bazlı Analizler' },
-    { value: 'content', label: 'İçerik Analizleri' },
-    { value: 'performance', label: 'Performans Metrikleri' },
-    { value: 'detail', label: 'Detaylı Görünümler' }
-  ];
+  const categories = {
+    all: "Tüm Raporlar",
+    time: "Zamana Dayalı Analizler",
+    content: "İçerik Analizleri",
+    performance: "Performans Metrikleri",
+    detailed: "Detaylı Görünümler"
+  };
   
   // Rapor seçimi
   const handleSelectReport = (report) => {
     setSelectedReport(report);
-    setSelectedTab(1); // Otomatik olarak rapor görüntüleme tabına geç
+    if (report && report.id) {
+      navigate(`/reports/${report.id}`);
+    }
   };
   
   // Sekme değişimi
@@ -59,23 +62,18 @@ const ReportsPage = () => {
   
   // Raporları getir
   const fetchReports = async () => {
+    setLoading(true);
+    setError(null);
+
     try {
-      setLoading(true);
-      setError(null);
+      const response = await api.get('/reports/list');
       
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/reports/list`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data.status === 'success') {
-        setReports(response.data.reports || []);
-      } else {
-        setError(response.data.message || 'Rapor listesi alınamadı');
+      if (response.data && Array.isArray(response.data.reports)) {
+        setReports(response.data.reports);
       }
     } catch (err) {
-      console.error('Rapor listesi getirme hatası:', err);
-      setError('Rapor listesi yüklenirken bir hata oluştu');
+      console.error('Error fetching reports:', err);
+      setError(err.message || 'Failed to load reports');
     } finally {
       setLoading(false);
     }
@@ -83,38 +81,37 @@ const ReportsPage = () => {
   
   // Favori raporları getir
   const fetchFavorites = async () => {
+    setLoading(true);
+    setError(null);
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/reports/favorites`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/reports/favorites');
       
-      if (response.data.status === 'success') {
-        setFavorites(response.data.favorites || []);
+      if (response.data && Array.isArray(response.data.favorites)) {
+        setFavorites(response.data.favorites);
       }
     } catch (err) {
-      console.error('Favori raporlar getirilirken hata:', err);
-      // Başarısız olursa boş array kullan
-      setFavorites([]);
+      console.error('Error fetching favorites:', err);
+      setError(err.message || 'Failed to load favorites');
+    } finally {
+      setLoading(false);
     }
   };
   
   // Sistem genel özetini getir
   const fetchSummary = async () => {
+    setSummaryLoading(true);
+    setSummaryError(null);
+
     try {
-      setSummaryLoading(true);
+      const response = await api.get('/reports/summary');
       
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/reports/summary`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data.status === 'success') {
-        setSummary(response.data.summary || null);
+      if (response.data) {
+        setSummary(response.data);
       }
     } catch (err) {
-      console.error('Özet bilgiler getirilirken hata:', err);
-      setSummary(null);
+      console.error('Error fetching summary data:', err);
+      setSummaryError(err.message || 'Failed to load summary data');
     } finally {
       setSummaryLoading(false);
     }
@@ -123,16 +120,12 @@ const ReportsPage = () => {
   // Favori ekle/çıkar
   const toggleFavorite = async (reportId) => {
     try {
-      const token = localStorage.getItem('token');
       const isFavorite = favorites.includes(reportId);
+      const endpoint = isFavorite ? '/reports/remove-favorite' : '/reports/add-favorite';
       
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/reports/${isFavorite ? 'unfavorite' : 'favorite'}/${reportId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await api.post(endpoint, { report_id: reportId });
       
-      if (response.data.status === 'success') {
+      if (response.data && response.data.status === 'success') {
         // Favori listesini güncelle
         if (isFavorite) {
           setFavorites(favorites.filter(id => id !== reportId));
@@ -141,7 +134,8 @@ const ReportsPage = () => {
         }
       }
     } catch (err) {
-      console.error('Favori işlemi sırasında hata:', err);
+      console.error('Error toggling favorite:', err);
+      setError(err.message || 'Failed to update favorites');
     }
   };
   
@@ -152,7 +146,7 @@ const ReportsPage = () => {
   
   // Raporları filtrele
   const filteredReports = reports.filter(report => {
-    const matchesSearch = report.display_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch = report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (report.description && report.description.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesCategory = filterCategory === 'all' || report.category === filterCategory;
@@ -175,64 +169,49 @@ const ReportsPage = () => {
       );
     }
     
+    if (summaryError) {
+      return (
+        <Alert severity="error">{summaryError}</Alert>
+      );
+    }
+    
     if (!summary) {
       return (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Özet bilgiler yüklenemedi. Lütfen daha sonra tekrar deneyin.
-        </Alert>
+        <Alert severity="info">Summary data not available</Alert>
       );
     }
     
     return (
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', boxShadow: 2 }}>
+      <Grid container spacing={3}>
+        <Grid item xs={12} md={3}>
+          <Card>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Toplam Mesaj
-              </Typography>
-              <Typography variant="h4" component="div">
-                {summary.total_messages || 0}
-              </Typography>
+              <Typography variant="h6">Toplam Mesaj</Typography>
+              <Typography variant="h4">{summary.total_messages || 0}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', boxShadow: 2 }}>
+        <Grid item xs={12} md={3}>
+          <Card>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Toplam Oturum
-              </Typography>
-              <Typography variant="h4" component="div">
-                {summary.total_sessions || 0}
-              </Typography>
+              <Typography variant="h6">Toplam Oturum</Typography>
+              <Typography variant="h4">{summary.total_sessions || 0}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', boxShadow: 2 }}>
+        <Grid item xs={12} md={3}>
+          <Card>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Bugünkü Mesaj
-              </Typography>
-              <Typography variant="h4" component="div">
-                {summary.today_messages || 0}
-              </Typography>
+              <Typography variant="h6">Bugünün Mesajları</Typography>
+              <Typography variant="h4">{summary.today_messages || 0}</Typography>
             </CardContent>
           </Card>
         </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          <Card sx={{ height: '100%', boxShadow: 2 }}>
+        <Grid item xs={12} md={3}>
+          <Card>
             <CardContent>
-              <Typography color="text.secondary" gutterBottom>
-                Context Kullanım Oranı
-              </Typography>
-              <Typography variant="h4" component="div">
-                %{summary.context_usage_percentage || 0}
-              </Typography>
+              <Typography variant="h6">Context Kullanımı</Typography>
+              <Typography variant="h4">{summary.context_usage_percent || 0}%</Typography>
             </CardContent>
           </Card>
         </Grid>

@@ -4,15 +4,16 @@ import {
   TextField, Table, TableBody, TableCell, TableContainer, 
   TableHead, TableRow, IconButton, Alert, CircularProgress,
   Dialog, DialogActions, DialogContent, DialogTitle,
-  Chip, Switch, FormControlLabel, Grid, Divider
+  Chip, Switch, FormControlLabel, Grid, Divider, Card, CardContent,
+  InputLabel, Select, MenuItem, FormControl
 } from '@mui/material';
 import { 
   Add, Edit, Delete, Refresh, PersonAdd, Settings, 
   Storage, Assessment, ViewList, Search, Check, Block,
-  Save
+  Save, Person, Dns, CloudUpload
 } from '@mui/icons-material';
 import { Route, Routes, useNavigate, useLocation } from 'react-router-dom';
-import api from '../services/apiConfig';
+import { api } from '../services/apiConfig';
 
 // Kullanıcı Yönetimi Bileşeni
 const UserManagement = () => {
@@ -21,6 +22,7 @@ const UserManagement = () => {
   const [error, setError] = useState(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [formValues, setFormValues] = useState({
     username: '',
     password: '',
@@ -236,94 +238,86 @@ const UserManagement = () => {
         </TableContainer>
       )}
       
-      {/* Kullanıcı Formu Dialog'u */}
+      {/* Kullanıcı Ekleme/Düzenleme Dialog */}
       <Dialog 
         open={openDialog} 
         onClose={handleCloseDialog}
-        maxWidth="sm"
         fullWidth
+        maxWidth="sm"
       >
         <DialogTitle>
-          {currentUser ? 'Kullanıcı Düzenle' : 'Yeni Kullanıcı Ekle'}
+          {currentUser ? 'Kullanıcıyı Düzenle' : 'Yeni Kullanıcı Ekle'}
         </DialogTitle>
         <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+          )}
+
           <TextField
+            autoFocus
+            margin="dense"
             name="username"
             label="Kullanıcı Adı"
+            type="text"
+            fullWidth
+            variant="outlined"
             value={formValues.username}
             onChange={handleFormChange}
-            fullWidth
-            margin="normal"
-            required
-            disabled={currentUser !== null} // Mevcut kullanıcının adı değiştirilemez
+            disabled={submitting}
+            sx={{ mb: 2 }}
           />
-          
           <TextField
+            margin="dense"
             name="password"
-            label="Şifre"
+            label={currentUser ? "Şifre (boş bırakılırsa değişmez)" : "Şifre"}
             type="password"
+            fullWidth
+            variant="outlined"
             value={formValues.password}
             onChange={handleFormChange}
-            fullWidth
-            margin="normal"
-            required={currentUser === null} // Yeni kullanıcı için zorunlu
-            helperText={currentUser ? 'Değiştirmek istemiyorsanız boş bırakın' : ''}
+            disabled={submitting}
+            sx={{ mb: 2 }}
           />
-          
           <TextField
+            margin="dense"
             name="email"
             label="E-posta"
             type="email"
+            fullWidth
+            variant="outlined"
             value={formValues.email}
             onChange={handleFormChange}
-            fullWidth
-            margin="normal"
+            disabled={submitting}
+            sx={{ mb: 2 }}
           />
-          
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="is_active"
-                    checked={formValues.is_active}
-                    onChange={handleFormChange}
-                  />
-                }
-                label="Aktif"
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>Rol</InputLabel>
+            <Select
+              name="role"
+              value={formValues.role}
+              onChange={handleFormChange}
+              disabled={submitting}
+            >
+              <MenuItem value="user">Kullanıcı</MenuItem>
+              <MenuItem value="admin">Admin</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControlLabel
+            control={
+              <Switch
+                checked={formValues.is_active}
+                onChange={handleFormChange}
+                name="is_active"
+                disabled={submitting}
               />
-            </Grid>
-            
-            <Grid item xs={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    name="role"
-                    checked={formValues.role === 'admin'}
-                    onChange={(e) => {
-                      setFormValues({
-                        ...formValues,
-                        role: e.target.checked ? 'admin' : 'user'
-                      });
-                    }}
-                  />
-                }
-                label="Admin"
-              />
-            </Grid>
-          </Grid>
+            }
+            label="Aktif"
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleCloseDialog}>İptal</Button>
-          <Button 
-            onClick={handleSaveUser} 
-            variant="contained" 
-            disabled={
-              !formValues.username || 
-              (!formValues.password && !currentUser)
-            }
-          >
-            Kaydet
+          <Button onClick={handleCloseDialog} disabled={submitting}>İptal</Button>
+          <Button onClick={handleSaveUser} color="primary" disabled={submitting}>
+            {submitting ? 'Kaydediliyor...' : 'Kaydet'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -337,6 +331,7 @@ const TableSettings = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Tablo adını getir
   const fetchTableName = async () => {
@@ -422,11 +417,11 @@ const TableSettings = () => {
         <Button 
           variant="contained" 
           onClick={handleSaveTableName}
-          disabled={loading || !tableName.trim()}
-          startIcon={loading ? <CircularProgress size={20} /> : <Save />}
+          disabled={loading || submitting || !tableName.trim()}
+          startIcon={submitting ? <CircularProgress size={20} /> : <Save />}
           sx={{ mt: 1 }}
         >
-          Kaydet
+          {submitting ? 'Kaydediliyor...' : 'Kaydet'}
         </Button>
       </Box>
       
@@ -446,6 +441,7 @@ const ReportManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   // Raporları getir
   const fetchReports = async () => {
@@ -593,8 +589,9 @@ const ReportManagement = () => {
                         variant="outlined"
                         color="primary"
                         onClick={() => handleRegisterReport(report)}
+                        disabled={submitting}
                       >
-                        Kaydet
+                        {submitting ? 'Ekleniyor...' : 'Ekle'}
                       </Button>
                     )}
                     
@@ -603,6 +600,7 @@ const ReportManagement = () => {
                         size="small" 
                         color={report.is_active ? 'error' : 'success'}
                         onClick={() => handleToggleReportStatus(report)}
+                        disabled={submitting}
                       >
                         {report.is_active ? <Block /> : <Check />}
                       </IconButton>

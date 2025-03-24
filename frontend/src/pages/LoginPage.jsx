@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Box, Container, Paper, Typography, TextField, Button, 
-  Alert, CircularProgress, Link
+  Alert, CircularProgress, Link, Grid
 } from '@mui/material';
 import { Lock, Person } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
-import api, { getApiBaseUrl } from '../services/apiConfig';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { api } from '../services/apiConfig';
 
 const LoginPage = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);

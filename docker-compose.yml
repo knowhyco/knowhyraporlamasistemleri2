@@ -32,7 +32,7 @@ services:
     environment:
       - COMPOSE_HTTP_TIMEOUT=180
       - NODE_OPTIONS="--max-old-space-size=4096"
-      - REACT_APP_API_URL=http://backend:8000/api
+      - REACT_APP_API_URL=http://localhost:8000/api
     networks:
       - knowhy-network
 
