@@ -540,8 +540,8 @@ ORDER BY date ASC`
 
   // Raporları getir
   const fetchReports = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+      setLoading(true);
+      setError(null);
     try {
       const response = await api.get('/reports/list');
       if (response.data.status === 'success') {
@@ -761,7 +761,7 @@ ORDER BY date ASC`
   // Sadece SQL kodunu güncelle
   const handleSaveSqlCode = async () => {
     setSubmitting(true);
-    setError(null);
+      setError(null);
     
     try {
       if (!selectedReport || !formValues.sql_code) {
@@ -963,18 +963,18 @@ ORDER BY date ASC`
       )}
 
       {/* Rapor Tablosu */}
-      <TableContainer>
+        <TableContainer>
         <Table sx={{ minWidth: 650 }} size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Rapor Adı</TableCell>
-              <TableCell>Açıklama</TableCell>
+            <TableHead>
+              <TableRow>
+                <TableCell>Rapor Adı</TableCell>
+                <TableCell>Açıklama</TableCell>
               <TableCell>Kategori</TableCell>
-              <TableCell>Durum</TableCell>
+                <TableCell>Durum</TableCell>
               <TableCell align="right">İşlemler</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+              </TableRow>
+            </TableHead>
+            <TableBody>
             {loading && reports.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} align="center">
@@ -1004,19 +1004,19 @@ ORDER BY date ASC`
                       <FormControlLabel
                         control={
                           <Switch
-                            size="small"
+                          size="small" 
                             checked={report.is_active}
                             onChange={() => handleToggleActive(report, !report.is_active)}
                             color="success"
-                          />
+                        />
                         }
                         label={
-                          <Chip 
-                            size="small"
+                        <Chip 
+                          size="small" 
                             label={report.is_active ? 'Aktif' : 'Pasif'} 
                             color={report.is_active ? 'success' : 'default'} 
-                            variant="outlined"
-                          />
+                          variant="outlined"
+                        />
                         }
                       />
                     </Tooltip>
@@ -1212,10 +1212,10 @@ ORDER BY date ASC`
                               <Box>
                                 <Typography variant="subtitle2">{template.name}</Typography>
                                 <Typography variant="body2" color="textSecondary">{template.description}</Typography>
-                              </Box>
-                              <Button 
+                    </Box>
+                      <Button 
                                 variant="outlined" 
-                                size="small"
+                        size="small" 
                                 onClick={() => handleApplySqlTemplate(template.code)}
                               >
                                 Uygula
@@ -1245,7 +1245,7 @@ ORDER BY date ASC`
               required
               multiline
               rows={10}
-              variant="outlined"
+                        variant="outlined"
               sx={{ fontFamily: 'monospace' }}
               placeholder="SELECT * FROM {TABLE_NAME} WHERE created_at BETWEEN '{START_DATE}' AND '{END_DATE}'"
             />
@@ -1257,7 +1257,7 @@ ORDER BY date ASC`
                 onClick={extractParametersFromSql}
               >
                 Parametreleri Otomatik Algıla
-              </Button>
+                      </Button>
               <Button 
                 variant="outlined"
                 onClick={() => setDialogTabValue(2)}
@@ -1313,7 +1313,7 @@ ORDER BY date ASC`
                             onChange={(e) => handleParameterChange(index, 'name', e.target.value)}
                             fullWidth
                             required
-                            size="small"
+                        size="small" 
                             helperText="SQL kodunda {PARAMETRE_ADI} olarak kullanın"
                           />
                         </Grid>

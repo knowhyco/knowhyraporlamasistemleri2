@@ -11,20 +11,27 @@ from migrations.setup_db import run_migrations
 # Loglama yapılandırması
 os.makedirs(LOG_FOLDER, exist_ok=True)
 log_file = os.path.join(LOG_FOLDER, 'app.log')
-logging.basicConfig(
-    filename=log_file,
-    level=logging.DEBUG,  # Daha ayrıntılı loglama için DEBUG seviyesine çıkardık
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file),
-        logging.StreamHandler()
-    ]
-)
 
-# Hataları konsola da yazdıralım
+# Ana logger'ı yapılandır
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+
+# Dosya handler'ı
+file_handler = logging.FileHandler(log_file)
+file_handler.setLevel(logging.DEBUG)
+
+# Konsol handler'ı
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.DEBUG)
-logging.getLogger().addHandler(console_handler)
+
+# Format
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+# Handler'ları ekle
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 # SQL dosyalarının yolunu kontrol et
 sql_files_dir = os.path.join(SQL_SCRIPTS_FOLDER, "sql_files")

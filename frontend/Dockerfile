@@ -1,4 +1,4 @@
-FROM node:16
+FROM node:16-alpine
 
 WORKDIR /app
 
@@ -9,13 +9,26 @@ RUN mkdir -p /app/node_modules && chown -R node:node /app
 USER node
 
 # npm yapılandırması
-RUN npm config set network-timeout 300000
+RUN npm config set network-timeout 300000 && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-mintimeout 10000 && \
+    npm config set fetch-retry-maxtimeout 60000
 
+# package.json ve package-lock.json kopyala
 COPY --chown=node:node package*.json ./
-RUN npm cache clean --force && npm install
 
+# npm install ve cache temizleme
+RUN npm cache clean --force && \
+    npm install --legacy-peer-deps && \
+    npm cache clean --force
+
+# Kaynak kodları kopyala
 COPY --chown=node:node . .
+
+# Build
+RUN npm run build
 
 EXPOSE 3000
 
+# Production modunda çalıştır
 CMD ["npm", "start"] 
