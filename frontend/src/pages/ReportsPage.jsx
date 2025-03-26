@@ -1,45 +1,164 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, Container, Grid, Paper, Typography, Card, CardContent, 
-  CardActionArea, CardMedia, TextField, MenuItem, InputAdornment,
-  Divider, CircularProgress, Chip, Button, Alert, Tab, Tabs, IconButton
+import {
+  Container, Grid, Paper, Typography, Box, Card, CardContent,
+  CardActionArea, IconButton, TextField, InputAdornment, Chip,
+  CircularProgress, Alert, Tabs, Tab, Divider, Button,
+  useTheme
 } from '@mui/material';
-import { 
-  Dashboard, TrendingUp, Search, Refresh, Favorite, 
-  FavoriteBorder, FilterList, BarChart, 
-  TableChart, CalendarToday, ViewList, Assessment
+import {
+  Search, Favorite, FavoriteBorder, TrendingUp, Assessment,
+  Timeline, PieChart, BarChart, ShowChart, Info
 } from '@mui/icons-material';
+import { Line, Bar, Pie } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import api from '../services/apiConfig';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../services/apiConfig';
-import ReportSelector from '../components/Reports/ReportSelector';
-import ReportViewer from '../components/Reports/ReportViewer';
 
-// Raporlar ana sayfası
+// Chart.js bileşenlerini kaydet
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
 const ReportsPage = () => {
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [selectedTab, setSelectedTab] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const theme = useTheme();
   const [reports, setReports] = useState([]);
   const [favorites, setFavorites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [tabValue, setTabValue] = useState(0);
-  const [summary, setSummary] = useState(null);
+  const [summaryData, setSummaryData] = useState(null);
+  const [selectedTab, setSelectedTab] = useState(0);
+  const [selectedReport, setSelectedReport] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState(null);
   
   const navigate = useNavigate();
   
-  // Rapor kategorileri
-  const categories = {
-    all: "Tüm Raporlar",
-    time: "Zamana Dayalı Analizler",
-    content: "İçerik Analizleri",
-    performance: "Performans Metrikleri",
-    detailed: "Detaylı Görünümler"
+  // Raporları getir
+  useEffect(() => {
+    const fetchReports = async () => {
+      try {
+        const response = await api.get('/reports/list');
+        if (response.data.status === 'success') {
+          setReports(response.data.reports || []);
+        }
+      } catch (err) {
+        console.error('Error fetching reports:', err);
+        setError('Raporlar yüklenirken bir hata oluştu');
+      }
+    };
+
+    const fetchFavorites = async () => {
+      try {
+        const response = await api.get('/reports/favorites');
+        if (response.data.status === 'success') {
+          setFavorites(response.data.favorites || []);
+        }
+      } catch (err) {
+        console.error('Error fetching favorites:', err);
+      }
+    };
+
+    const fetchSummaryData = async () => {
+      try {
+        const response = await api.get('/reports/summary');
+        if (response.data.status === 'success') {
+          setSummaryData(response.data.summary);
+        }
+      } catch (err) {
+        console.error('Error fetching summary data:', err);
+      }
+    };
+
+    Promise.all([fetchReports(), fetchFavorites(), fetchSummaryData()])
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Raporları filtrele
+  const filteredReports = reports.filter(report => {
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      (report?.display_name?.toLowerCase() || '').includes(searchLower) ||
+      (report?.description?.toLowerCase() || '').includes(searchLower) ||
+      (report?.category?.toLowerCase() || '').includes(searchLower)
+    );
+  });
+
+  // Özet grafik verileri
+  const summaryChartData = {
+    labels: ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'],
+    datasets: [
+      {
+        label: 'Haftalık Aktivite',
+        data: summaryData?.weekly_activity || [0, 0, 0, 0, 0, 0, 0],
+        borderColor: theme.palette.primary.main,
+        backgroundColor: theme.palette.primary.light,
+        fill: true,
+      }
+    ]
   };
-  
+
+  const pieChartData = {
+    labels: ['Context Kullanılan', 'Context Kullanılmayan'],
+    datasets: [
+      {
+        data: [
+          summaryData?.context_usage?.used || 0,
+          summaryData?.context_usage?.not_used || 0
+        ],
+        backgroundColor: [
+          theme.palette.success.main,
+          theme.palette.grey[300]
+        ]
+      }
+    ]
+  };
+
+  const barChartData = {
+    labels: ['00-04', '04-08', '08-12', '12-16', '16-20', '20-24'],
+    datasets: [
+      {
+        label: 'Saatlik Dağılım',
+        data: summaryData?.hourly_distribution || [0, 0, 0, 0, 0, 0],
+        backgroundColor: theme.palette.secondary.main,
+      }
+    ]
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+      }
+    }
+  };
+
+  // Tab değişikliği
+  const handleTabChange = (event, newValue) => {
+    setSelectedTab(newValue);
+  };
+
   // Rapor seçimi
   const handleSelectReport = (report) => {
     setSelectedReport(report);
@@ -47,90 +166,21 @@ const ReportsPage = () => {
       navigate(`/reports/${report.id}`);
     }
   };
-  
-  // Sekme değişimi
-  const handleTabChange = (event, newValue) => {
-    setSelectedTab(newValue);
-  };
-  
-  // Rapor listesini getir
-  useEffect(() => {
-    fetchReports();
-    fetchFavorites();
-    fetchSummary();
-  }, []);
-  
-  // Raporları getir
-  const fetchReports = async () => {
-    setLoading(true);
-    setError(null);
 
-    try {
-      const response = await api.get('/reports/list');
-      
-      if (response.data && Array.isArray(response.data.reports)) {
-        setReports(response.data.reports);
-      }
-    } catch (err) {
-      console.error('Error fetching reports:', err);
-      setError(err.message || 'Failed to load reports');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Favori raporları getir
-  const fetchFavorites = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await api.get('/reports/favorites');
-      
-      if (response.data && Array.isArray(response.data.favorites)) {
-        setFavorites(response.data.favorites);
-      }
-    } catch (err) {
-      console.error('Error fetching favorites:', err);
-      setError(err.message || 'Failed to load favorites');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Sistem genel özetini getir
-  const fetchSummary = async () => {
-    setSummaryLoading(true);
-    setSummaryError(null);
-
-    try {
-      const response = await api.get('/reports/summary');
-      
-      if (response.data) {
-        setSummary(response.data);
-      }
-    } catch (err) {
-      console.error('Error fetching summary data:', err);
-      setSummaryError(err.message || 'Failed to load summary data');
-    } finally {
-      setSummaryLoading(false);
-    }
-  };
-  
   // Favori ekle/çıkar
-  const toggleFavorite = async (reportId) => {
+  const handleToggleFavorite = async (report) => {
     try {
-      const isFavorite = favorites.includes(reportId);
+      const isFavorite = favorites.includes(report.report_name);
       const endpoint = isFavorite ? '/reports/remove-favorite' : '/reports/add-favorite';
       
-      const response = await api.post(endpoint, { report_id: reportId });
+      const response = await api.post(endpoint, { report_id: report.report_name });
       
       if (response.data && response.data.status === 'success') {
         // Favori listesini güncelle
         if (isFavorite) {
-          setFavorites(favorites.filter(id => id !== reportId));
+          setFavorites(favorites.filter(id => id !== report.report_name));
         } else {
-          setFavorites([...favorites, reportId]);
+          setFavorites([...favorites, report.report_name]);
         }
       }
     } catch (err) {
@@ -138,145 +188,172 @@ const ReportsPage = () => {
       setError(err.message || 'Failed to update favorites');
     }
   };
-  
-  // Rapor detay sayfasına git
-  const goToReportDetail = (reportId) => {
-    navigate(`/reports/${reportId}`);
-  };
-  
-  // Raporları filtrele
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (report.description && report.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesCategory = filterCategory === 'all' || report.category === filterCategory;
-    
-    return matchesSearch && matchesCategory;
-  });
-  
-  // Favorilere göre filtrele
-  const visibleReports = tabValue === 0 
-    ? filteredReports 
-    : filteredReports.filter(report => favorites.includes(report.id));
-  
-  // Özet kartları
-  const SummaryCards = () => {
-    if (summaryLoading) {
-      return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress />
-        </Box>
-      );
-    }
-    
-    if (summaryError) {
-      return (
-        <Alert severity="error">{summaryError}</Alert>
-      );
-    }
-    
-    if (!summary) {
-      return (
-        <Alert severity="info">Summary data not available</Alert>
-      );
-    }
-    
-    return (
-      <Grid container spacing={3}>
+
+  return (
+    <Container maxWidth="xl" sx={{ py: 3 }}>
+      {/* Özet Kartları */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Toplam Mesaj</Typography>
-              <Typography variant="h4">{summary.total_messages || 0}</Typography>
-            </CardContent>
-          </Card>
+          <Paper sx={{ p: 2, height: '100%', bgcolor: 'primary.light' }}>
+            <Typography variant="h6" gutterBottom>
+              Toplam Oturum
+            </Typography>
+            <Typography variant="h3">
+              {summaryData?.total_sessions || 0}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Son 24 saat: +{summaryData?.new_sessions || 0}
+            </Typography>
+          </Paper>
         </Grid>
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Toplam Oturum</Typography>
-              <Typography variant="h4">{summary.total_sessions || 0}</Typography>
-            </CardContent>
-          </Card>
+          <Paper sx={{ p: 2, height: '100%', bgcolor: 'secondary.light' }}>
+            <Typography variant="h6" gutterBottom>
+              Toplam Mesaj
+            </Typography>
+            <Typography variant="h3">
+              {summaryData?.total_messages || 0}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Ortalama: {summaryData?.avg_messages_per_session || 0}/oturum
+            </Typography>
+          </Paper>
         </Grid>
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Bugünün Mesajları</Typography>
-              <Typography variant="h4">{summary.today_messages || 0}</Typography>
-            </CardContent>
-          </Card>
+          <Paper sx={{ p: 2, height: '100%', bgcolor: 'success.light' }}>
+            <Typography variant="h6" gutterBottom>
+              Context Kullanımı
+            </Typography>
+            <Typography variant="h3">
+              %{summaryData?.context_usage_percentage || 0}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Son 24 saat: %{summaryData?.recent_context_usage || 0}
+            </Typography>
+          </Paper>
         </Grid>
         <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6">Context Kullanımı</Typography>
-              <Typography variant="h4">{summary.context_usage_percent || 0}%</Typography>
-            </CardContent>
-          </Card>
+          <Paper sx={{ p: 2, height: '100%', bgcolor: 'warning.light' }}>
+            <Typography variant="h6" gutterBottom>
+              Ortalama Yanıt Süresi
+            </Typography>
+            <Typography variant="h3">
+              {summaryData?.avg_response_time || 0}s
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Son 1 saat: {summaryData?.recent_response_time || 0}s
+            </Typography>
+          </Paper>
         </Grid>
       </Grid>
-    );
-  };
-  
-  return (
-    <Container maxWidth="xl">
-      <Box sx={{ my: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          Raporlar
-        </Typography>
-        <Typography variant="body1" color="text.secondary" paragraph>
-          Mevcut raporları görüntüleyebilir ve filtreleyebilirsiniz.
-        </Typography>
-        
-        <Paper sx={{ mt: 3 }}>
-          <Tabs
-            value={selectedTab}
-            onChange={handleTabChange}
-            indicatorColor="primary"
-            textColor="primary"
-            variant="fullWidth"
-          >
-            <Tab icon={<ViewList />} label="Rapor Listesi" />
-            <Tab 
-              icon={<Assessment />} 
-              label="Rapor Görüntüleme" 
-              disabled={!selectedReport}
-            />
-          </Tabs>
-          
-          <Divider />
-          
-          <Box sx={{ p: 3 }}>
-            {selectedTab === 0 ? (
-              <ReportSelector onSelectReport={handleSelectReport} />
-            ) : (
-              selectedReport ? (
-                <ReportViewer 
-                  reportName={selectedReport.report_name}
-                  displayName={selectedReport.display_name}
-                  description={selectedReport.description}
-                  parameters={selectedReport.parameters}
-                />
-              ) : (
-                <Box sx={{ py: 5, textAlign: 'center' }}>
-                  <Typography variant="h6" color="text.secondary" gutterBottom>
-                    Henüz bir rapor seçilmedi
-                  </Typography>
-                  <Button 
-                    variant="outlined" 
-                    color="primary" 
-                    onClick={() => setSelectedTab(0)}
-                    sx={{ mt: 2 }}
-                  >
-                    Rapor Seçin
-                  </Button>
-                </Box>
-              )
-            )}
+
+      {/* Grafikler */}
+      <Paper sx={{ mb: 4 }}>
+        <Tabs
+          value={selectedTab}
+          onChange={handleTabChange}
+          indicatorColor="primary"
+          textColor="primary"
+          variant="fullWidth"
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab icon={<ShowChart />} label="Aktivite Trendi" />
+          <Tab icon={<PieChart />} label="Context Analizi" />
+          <Tab icon={<BarChart />} label="Saatlik Dağılım" />
+        </Tabs>
+
+        <Box sx={{ p: 3, height: 400 }}>
+          {selectedTab === 0 && (
+            <Line data={summaryChartData} options={chartOptions} />
+          )}
+          {selectedTab === 1 && (
+            <Pie data={pieChartData} options={chartOptions} />
+          )}
+          {selectedTab === 2 && (
+            <Bar data={barChartData} options={chartOptions} />
+          )}
+        </Box>
+      </Paper>
+
+      {/* Rapor Listesi */}
+      <Paper sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5">
+            Raporlar
+          </Typography>
+          <TextField
+            size="small"
+            placeholder="Rapor ara..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
+
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+            <CircularProgress />
           </Box>
-        </Paper>
-      </Box>
+        ) : error ? (
+          <Alert severity="error">{error}</Alert>
+        ) : (
+          <Grid container spacing={2}>
+            {filteredReports.map((report) => (
+              <Grid item xs={12} sm={6} md={4} key={report.id || report.report_name}>
+                <Card>
+                  <CardActionArea onClick={() => handleSelectReport(report)}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <Typography variant="h6" gutterBottom>
+                          {report.display_name}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavorite(report);
+                          }}
+                        >
+                          {favorites.includes(report.report_name) ? (
+                            <Favorite color="error" />
+                          ) : (
+                            <FavoriteBorder />
+                          )}
+                        </IconButton>
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" paragraph>
+                        {report.description}
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Chip
+                          size="small"
+                          label={report.category}
+                          color="primary"
+                          variant="outlined"
+                        />
+                        {report.is_active && (
+                          <Chip
+                            size="small"
+                            label="Aktif"
+                            color="success"
+                            variant="outlined"
+                          />
+                        )}
+                      </Box>
+                    </CardContent>
+                  </CardActionArea>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        )}
+      </Paper>
     </Container>
   );
 };

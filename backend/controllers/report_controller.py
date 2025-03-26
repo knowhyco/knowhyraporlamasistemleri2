@@ -509,4 +509,609 @@ def toggle_report_active(payload, report_id):
         return jsonify({
             'status': 'error',
             'message': f'Rapor durum değiştirme sırasında hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/detail/<report_name>', methods=['GET'])
+@auth_required
+def get_report_detail(payload, report_name):
+    """
+    Rapor detaylarını ve SQL kodunu döndürür
+    """
+    try:
+        # Veritabanında rapor var mı kontrol et
+        try:
+            # Önce category sütunu eklenmiş mi kontrol et
+            check_query = f"""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = '{SYSTEM_TABLE_PREFIX}reports'
+            AND column_name = 'category'
+            """
+            category_exists = execute_query(check_query, fetch_all=True)
+            
+            if category_exists and len(category_exists) > 0:
+                # Category sütunu varsa
+                query = f"""
+                SELECT id, report_name, display_name, description, parameters, category, is_active
+                FROM {SYSTEM_TABLE_PREFIX}reports
+                WHERE report_name = %s
+                """
+            else:
+                # Category sütunu yoksa
+                query = f"""
+                SELECT id, report_name, display_name, description, parameters, is_active
+                FROM {SYSTEM_TABLE_PREFIX}reports
+                WHERE report_name = %s
+                """
+                
+            report = execute_query(query, (report_name,), fetch_all=False)
+        except Exception as db_error:
+            logging.error(f"Veritabanı tablosu/sütunu hatası: {db_error}")
+            # Fallback sorgu - Sadece temel bilgileri sorgula
+            query = f"""
+            SELECT id, report_name, display_name, description, parameters, is_active
+            FROM {SYSTEM_TABLE_PREFIX}reports
+            WHERE report_name = %s
+            """
+            report = execute_query(query, (report_name,), fetch_all=False)
+        
+        # SQL dosyasını oku
+        try:
+            sql_code = read_sql_file(report_name)
+        except FileNotFoundError:
+            sql_code = ""
+            
+        # Parametreleri hazırla
+        if report and isinstance(report.get('parameters'), str):
+            try:
+                parameters = json.loads(report['parameters'])
+            except:
+                parameters = {}
+        else:
+            parameters = {}
+            if report and report.get('parameters'):
+                parameters = report['parameters']
+        
+        # Rapor bilgilerini döndür
+        result = {
+            'report_name': report_name,
+            'display_name': report['display_name'] if report else report_name,
+            'description': report['description'] if report else "",
+            'category': report.get('category', 'time') if report else "time",
+            'parameters': parameters,
+            'is_active': report['is_active'] if report else False,
+            'sql_code': sql_code
+        }
+        
+        return jsonify({
+            'status': 'success',
+            **result
+        })
+        
+    except Exception as e:
+        logging.error(f"Rapor detay hatası: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Rapor detayı alınırken hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/sql-code/<report_name>', methods=['GET'])
+@auth_required
+def get_report_sql_code(payload, report_name):
+    """
+    Rapor SQL kodunu döndürür
+    """
+    try:
+        # SQL dosyasını oku
+        try:
+            sql_code = read_sql_file(report_name)
+        except FileNotFoundError:
+            return jsonify({
+                'status': 'error',
+                'message': f"'{report_name}' rapor dosyası bulunamadı"
+            }), 404
+        
+        return jsonify({
+            'status': 'success',
+            'report_name': report_name,
+            'sql_code': sql_code
+        })
+        
+    except Exception as e:
+        logging.error(f"SQL kodu hatası: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'SQL kodu alınırken hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/create', methods=['POST'])
+@auth_required
+def create_report(payload):
+    """
+    Yeni bir rapor oluşturur
+    """
+    try:
+        data = request.get_json()
+        
+        # Zorunlu alanları kontrol et
+        required_fields = ['report_name', 'display_name', 'sql_code']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return jsonify({
+                    'status': 'error',
+                    'message': f"'{field}' alanı gerekli"
+                }), 400
+        
+        report_name = data['report_name']
+        display_name = data['display_name']
+        description = data.get('description', '')
+        category = data.get('category', 'time')
+        sql_code = data['sql_code']
+        parameters = data.get('parameters', [])
+        
+        # Rapor adının benzersiz olup olmadığını kontrol et
+        check_query = f"""
+        SELECT id FROM {SYSTEM_TABLE_PREFIX}reports
+        WHERE report_name = %s
+        """
+        existing = execute_query(check_query, (report_name,), fetch_all=False)
+        
+        if existing:
+            return jsonify({
+                'status': 'error',
+                'message': f"'{report_name}' adında bir rapor zaten mevcut"
+            }), 400
+        
+        # SQL dosyasını oluştur
+        sql_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.sql")
+        with open(sql_file_path, 'w', encoding='utf-8') as f:
+            f.write(sql_code)
+        
+        # Markdown dosyasını oluştur
+        md_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.md")
+        with open(md_file_path, 'w', encoding='utf-8') as f:
+            f.write(f"# {display_name}\n")
+            f.write(f"{description}\n\n")
+            f.write("```sql\n")
+            f.write(sql_code)
+            f.write("\n```\n")
+        
+        # Parametreleri JSON formatına dönüştür
+        parameters_json = json.dumps(parameters)
+        
+        # Category sütunu var mı kontrol et
+        check_query = f"""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = '{SYSTEM_TABLE_PREFIX}reports'
+        AND column_name = 'category'
+        """
+        category_exists = execute_query(check_query, fetch_all=True)
+        
+        # Raporu veritabanına kaydet
+        if category_exists and len(category_exists) > 0:
+            # Category sütunu varsa
+            query = f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}reports 
+            (report_name, display_name, description, category, parameters, is_active)
+            VALUES (%s, %s, %s, %s, %s, true)
+            RETURNING id
+            """
+            result = execute_query(query, (
+                report_name, 
+                display_name, 
+                description,
+                category,
+                parameters_json
+            ), fetch_all=False, commit=True)
+        else:
+            # Category sütunu yoksa
+            query = f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}reports 
+            (report_name, display_name, description, parameters, is_active)
+            VALUES (%s, %s, %s, %s, true)
+            RETURNING id
+            """
+            result = execute_query(query, (
+                report_name, 
+                display_name, 
+                description,
+                parameters_json
+            ), fetch_all=False, commit=True)
+        
+        # Logla
+        execute_query(f"""
+        INSERT INTO {SYSTEM_TABLE_PREFIX}logs (user_id, action, details, ip_address)
+        VALUES (%s, 'create_report', %s, %s)
+        """, (
+            payload['sub'], 
+            json.dumps({'report_name': report_name}),
+            request.remote_addr
+        ), commit=True)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Rapor başarıyla oluşturuldu',
+            'report_id': result['id'] if result else None
+        })
+        
+    except Exception as e:
+        logging.error(f"Rapor oluşturma hatası: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Rapor oluşturulurken hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/update/<report_name>', methods=['POST'])
+@auth_required
+def update_report(payload, report_name):
+    """
+    Var olan bir raporu günceller
+    """
+    try:
+        data = request.get_json()
+        
+        # Zorunlu alanları kontrol et
+        required_fields = ['display_name', 'sql_code']
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return jsonify({
+                    'status': 'error',
+                    'message': f"'{field}' alanı gerekli"
+                }), 400
+        
+        display_name = data['display_name']
+        description = data.get('description', '')
+        category = data.get('category', 'time')
+        sql_code = data['sql_code']
+        parameters = data.get('parameters', [])
+        
+        # Raporun var olup olmadığını kontrol et
+        check_query = f"""
+        SELECT id FROM {SYSTEM_TABLE_PREFIX}reports
+        WHERE report_name = %s
+        """
+        existing = execute_query(check_query, (report_name,), fetch_all=False)
+        
+        if not existing:
+            return jsonify({
+                'status': 'error',
+                'message': f"'{report_name}' adında bir rapor bulunamadı"
+            }), 404
+        
+        # SQL dosyasını güncelle
+        sql_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.sql")
+        with open(sql_file_path, 'w', encoding='utf-8') as f:
+            f.write(sql_code)
+        
+        # Markdown dosyasını güncelle
+        md_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.md")
+        with open(md_file_path, 'w', encoding='utf-8') as f:
+            f.write(f"# {display_name}\n")
+            f.write(f"{description}\n\n")
+            f.write("```sql\n")
+            f.write(sql_code)
+            f.write("\n```\n")
+        
+        # Parametreleri JSON formatına dönüştür
+        parameters_json = json.dumps(parameters)
+        
+        # Category sütunu var mı kontrol et
+        check_query = f"""
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = '{SYSTEM_TABLE_PREFIX}reports'
+        AND column_name = 'category'
+        """
+        category_exists = execute_query(check_query, fetch_all=True)
+        
+        # Raporu veritabanında güncelle
+        if category_exists and len(category_exists) > 0:
+            # Category sütunu varsa
+            query = f"""
+            UPDATE {SYSTEM_TABLE_PREFIX}reports
+            SET display_name = %s,
+                description = %s,
+                category = %s,
+                parameters = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE report_name = %s
+            """
+            execute_query(query, (
+                display_name, 
+                description,
+                category,
+                parameters_json,
+                report_name
+            ), commit=True)
+        else:
+            # Category sütunu yoksa
+            query = f"""
+            UPDATE {SYSTEM_TABLE_PREFIX}reports
+            SET display_name = %s,
+                description = %s,
+                parameters = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE report_name = %s
+            """
+            execute_query(query, (
+                display_name, 
+                description,
+                parameters_json,
+                report_name
+            ), commit=True)
+        
+        # Logla
+        execute_query(f"""
+        INSERT INTO {SYSTEM_TABLE_PREFIX}logs (user_id, action, details, ip_address)
+        VALUES (%s, 'update_report', %s, %s)
+        """, (
+            payload['sub'], 
+            json.dumps({'report_name': report_name}),
+            request.remote_addr
+        ), commit=True)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Rapor başarıyla güncellendi'
+        })
+        
+    except Exception as e:
+        logging.error(f"Rapor güncelleme hatası: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Rapor güncellenirken hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/update-sql/<report_name>', methods=['POST'])
+@auth_required
+def update_report_sql(payload, report_name):
+    """
+    Sadece rapor SQL kodunu günceller
+    """
+    try:
+        data = request.get_json()
+        
+        if 'sql_code' not in data or not data['sql_code']:
+            return jsonify({
+                'status': 'error',
+                'message': "SQL kodu gerekli"
+            }), 400
+        
+        sql_code = data['sql_code']
+        
+        # Raporun var olup olmadığını kontrol et
+        check_query = f"""
+        SELECT id, display_name FROM {SYSTEM_TABLE_PREFIX}reports
+        WHERE report_name = %s
+        """
+        report = execute_query(check_query, (report_name,), fetch_all=False)
+        
+        if not report:
+            return jsonify({
+                'status': 'error',
+                'message': f"'{report_name}' adında bir rapor bulunamadı"
+            }), 404
+        
+        # SQL dosyasını güncelle
+        sql_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.sql")
+        with open(sql_file_path, 'w', encoding='utf-8') as f:
+            f.write(sql_code)
+        
+        # Markdown dosyasını güncelle
+        md_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.md")
+        
+        # Önce markdown dosyasını oku (eğer varsa)
+        try:
+            with open(md_file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+            # Başlığı ve açıklamayı çıkar
+            title_match = re.search(r'^# (.*?)$', content, re.MULTILINE)
+            display_name = title_match.group(1) if title_match else report['display_name']
+            
+            desc_match = re.search(r'^# .*?\n(.*?)(?=\n```|\n#|$)', content, re.DOTALL)
+            description = desc_match.group(1).strip() if desc_match else ""
+            
+        except (FileNotFoundError, Exception) as e:
+            # Dosya yoksa veya okuma hatası varsa veritabanından al
+            display_name = report['display_name']
+            description = ""
+        
+        # Markdown'ı güncelle
+        with open(md_file_path, 'w', encoding='utf-8') as f:
+            f.write(f"# {display_name}\n")
+            f.write(f"{description}\n\n")
+            f.write("```sql\n")
+            f.write(sql_code)
+            f.write("\n```\n")
+        
+        # Veritabanında updated_at'i güncelle
+        query = f"""
+        UPDATE {SYSTEM_TABLE_PREFIX}reports
+        SET updated_at = CURRENT_TIMESTAMP
+        WHERE report_name = %s
+        """
+        execute_query(query, (report_name,), commit=True)
+        
+        # SQL dosyasından parametreleri çıkar
+        extracted_params = extract_parameters(sql_code)
+        
+        # Mevcut parametreleri al (varsa eski değerleri koru)
+        param_query = f"""
+        SELECT parameters FROM {SYSTEM_TABLE_PREFIX}reports
+        WHERE report_name = %s
+        """
+        param_result = execute_query(param_query, (report_name,), fetch_all=False)
+        
+        if param_result and param_result.get('parameters'):
+            try:
+                if isinstance(param_result['parameters'], str):
+                    current_params = json.loads(param_result['parameters'])
+                else:
+                    current_params = param_result['parameters']
+            except:
+                current_params = {}
+        else:
+            current_params = {}
+        
+        # Yeni parametreler için default değerleri ekle
+        updated_params = {}
+        for param in extracted_params:
+            if param in current_params:
+                # Mevcut parametreyi koru
+                updated_params[param] = current_params[param]
+            else:
+                # Yeni parametre için varsayılan değer ata
+                updated_params[param] = {
+                    'type': 'text',
+                    'default': '',
+                    'options': []
+                }
+                
+                # Tarih parametreleri için özel durum
+                if 'DATE' in param:
+                    updated_params[param]['type'] = 'date'
+        
+        # Parametreleri güncelle
+        update_params_query = f"""
+        UPDATE {SYSTEM_TABLE_PREFIX}reports
+        SET parameters = %s
+        WHERE report_name = %s
+        """
+        execute_query(update_params_query, (
+            json.dumps(updated_params),
+            report_name
+        ), commit=True)
+        
+        # Logla
+        execute_query(f"""
+        INSERT INTO {SYSTEM_TABLE_PREFIX}logs (user_id, action, details, ip_address)
+        VALUES (%s, 'update_report_sql', %s, %s)
+        """, (
+            payload['sub'], 
+            json.dumps({'report_name': report_name}),
+            request.remote_addr
+        ), commit=True)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'SQL kodu başarıyla güncellendi'
+        })
+        
+    except Exception as e:
+        logging.error(f"SQL kodu güncelleme hatası: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'SQL kodu güncellenirken hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/toggle-active/<report_name>', methods=['PUT'])
+@auth_required
+def toggle_report_active_by_name(payload, report_name):
+    """
+    Report aktif/pasif durumunu değiştirir (rapor adı ile)
+    """
+    try:
+        data = request.get_json()
+        is_active = data.get('is_active', True)
+        
+        # Raporu veritabanında güncelle
+        query = f"""
+        UPDATE {SYSTEM_TABLE_PREFIX}reports
+        SET is_active = %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE report_name = %s
+        RETURNING id
+        """
+        
+        result = execute_query(query, (is_active, report_name), fetch_all=False, commit=True)
+        
+        if not result:
+            return jsonify({
+                'status': 'error',
+                'message': f"'{report_name}' raporu bulunamadı"
+            }), 404
+        
+        # Logla
+        execute_query(f"""
+        INSERT INTO {SYSTEM_TABLE_PREFIX}logs (user_id, action, details, ip_address)
+        VALUES (%s, 'toggle_report', %s, %s)
+        """, (
+            payload['sub'], 
+            json.dumps({'report_name': report_name, 'is_active': is_active}),
+            request.remote_addr
+        ), commit=True)
+        
+        return jsonify({
+            'status': 'success',
+            'message': f"Rapor başarıyla {'aktifleştirildi' if is_active else 'pasifleştirildi'}"
+        })
+        
+    except Exception as e:
+        logging.error(f"Rapor durumu değiştirme hatası: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Rapor durumu değiştirilirken hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/delete/<report_name>', methods=['DELETE'])
+@auth_required
+def delete_report(payload, report_name):
+    """
+    Raporu siler
+    """
+    try:
+        # Raporu veritabanından sil
+        query = f"""
+        DELETE FROM {SYSTEM_TABLE_PREFIX}reports
+        WHERE report_name = %s
+        RETURNING id
+        """
+        
+        result = execute_query(query, (report_name,), fetch_all=False, commit=True)
+        
+        if not result:
+            return jsonify({
+                'status': 'error',
+                'message': f"'{report_name}' raporu bulunamadı"
+            }), 404
+        
+        # SQL ve Markdown dosyalarını sil
+        try:
+            sql_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.sql")
+            if os.path.exists(sql_file_path):
+                os.remove(sql_file_path)
+                
+            md_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.md")
+            if os.path.exists(md_file_path):
+                os.remove(md_file_path)
+        except Exception as e:
+            logging.warning(f"Rapor dosyaları silinirken hata: {e}")
+            # Dosya silme hatası kritik değil, devam et
+        
+        # Logla
+        execute_query(f"""
+        INSERT INTO {SYSTEM_TABLE_PREFIX}logs (user_id, action, details, ip_address)
+        VALUES (%s, 'delete_report', %s, %s)
+        """, (
+            payload['sub'], 
+            json.dumps({'report_name': report_name}),
+            request.remote_addr
+        ), commit=True)
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Rapor başarıyla silindi'
+        })
+        
+    except Exception as e:
+        logging.error(f"Rapor silme hatası: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Rapor silinirken hata oluştu: {str(e)}'
         }), 500 

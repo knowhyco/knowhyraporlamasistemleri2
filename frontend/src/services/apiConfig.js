@@ -2,9 +2,15 @@ import axios from 'axios';
 
 // API URL'sini belirle - Docker ve tarayıcı uyumluluğu için
 function getApiBaseUrl() {
-  // Tarayıcıdan API'ye erişirken her zaman localhost kullanılmalı
-  // Docker container içinde "backend:8000" kullanılsa da, tarayıcı bu host adını çözemez
-  return 'http://localhost:8000/api';
+  // Sunucu domain/IP adresini dinamik olarak al
+  const currentHost = window.location.hostname;
+  const apiPort = 8000;
+  
+  // Eğer tarayıcıdan erişiliyorsa, sunucu IP'sine yönlendir
+  return `http://${currentHost}:${apiPort}/api`;
+  
+  // Not: Localhost geliştirme ortamı için aşağıdaki satırı kullanabilirsiniz
+  // return 'http://localhost:8000/api';
 }
 
 console.log('Using API URL:', getApiBaseUrl());

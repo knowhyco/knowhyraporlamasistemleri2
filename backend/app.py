@@ -14,7 +14,11 @@ log_file = os.path.join(LOG_FOLDER, 'app.log')
 logging.basicConfig(
     filename=log_file,
     level=logging.DEBUG,  # Daha ayrıntılı loglama için DEBUG seviyesine çıkardık
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
 )
 
 # Hataları konsola da yazdıralım
@@ -48,12 +52,13 @@ except Exception as e:
 app = Flask(__name__)
 
 # CORS yapılandırması - Belirli kaynaklardan gelen isteklere izin ver
-CORS(app, resources={r"/api/*": {"origins": [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://100.26.61.207:3000",
-    "http://frontend:3000"
-]}}, supports_credentials=True)
+CORS(app, resources={
+    r"/api/*": {
+        "origins": ["http://100.26.61.207:3000", "http://localhost:3000"],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # socketio = SocketIO(app, cors_allowed_origins="*")
 
