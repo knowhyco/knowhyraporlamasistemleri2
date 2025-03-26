@@ -20,6 +20,7 @@ COPY --chown=node:node package*.json ./
 # npm install ve cache temizleme
 RUN npm cache clean --force && \
     npm install --legacy-peer-deps && \
+    npm install -D tailwindcss@3.3.0 postcss@8.4.21 autoprefixer@10.4.14 postcss-import@15.1.0 && \
     npm cache clean --force
 
 # Kaynak kodları kopyala

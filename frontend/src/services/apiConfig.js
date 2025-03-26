@@ -18,11 +18,17 @@ export const removeAuthToken = () => {
 };
 
 // API bağlantı ayarları
-const currentHost = window.location.hostname;
-const apiPort = 8000; // Sabit port 8000 kullan
-const protocol = window.location.protocol;
-// API için temel URL'yi oluştur
-const baseUrl = `${protocol}//${currentHost}:${apiPort}/api`;
+
+// Önce çevre değişkenlerinden API URL'yi almaya çalış
+let baseUrl = process.env.REACT_APP_API_URL;
+
+// Eğer çevre değişkeni yoksa, dinamik olarak URL oluştur
+if (!baseUrl) {
+  const currentHost = window.location.hostname;
+  const apiPort = 8000; // Sabit port 8000 kullan
+  const protocol = window.location.protocol;
+  baseUrl = `${protocol}//${currentHost}:${apiPort}/api`;
+}
 
 console.log(`API Base URL: ${baseUrl}`);
 
@@ -32,7 +38,9 @@ const apiInstance = axios.create({
   timeout: 30000, // 30 saniye
   headers: {
     'Content-Type': 'application/json',
-  }
+    'Accept': 'application/json'
+  },
+  withCredentials: false // CORS için false olarak değiştiriyoruz
 });
 
 // Uzun sürebilecek işlemler için ayrı bir instance
@@ -41,7 +49,9 @@ export const longTimeoutApiInstance = axios.create({
   timeout: 300000, // 5 dakika
   headers: {
     'Content-Type': 'application/json',
-  }
+    'Accept': 'application/json'
+  },
+  withCredentials: false
 });
 
 // Talep interceptor - isteklere token ekle

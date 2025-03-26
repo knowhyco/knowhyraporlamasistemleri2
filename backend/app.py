@@ -1,12 +1,24 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 # from flask_socketio import SocketIO
 import logging
 import os
 import traceback
+import json
+import decimal
+from datetime import date, datetime
 from config import LOG_FOLDER, SQL_SCRIPTS_FOLDER
 from utils.sql_helper import convert_md_to_sql_files
 from migrations.setup_db import run_migrations
+
+# Özel JSON Encoder - Decimal ve Datetime objelerini serileştirmek için
+class CustomJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, decimal.Decimal):
+            return float(obj)
+        elif isinstance(obj, (datetime, date)):
+            return obj.isoformat()
+        return super(CustomJSONEncoder, self).default(obj)
 
 # Loglama yapılandırması
 os.makedirs(LOG_FOLDER, exist_ok=True)
@@ -57,15 +69,10 @@ except Exception as e:
 
 # Uygulama ve Socket.IO başlatma
 app = Flask(__name__)
+app.json_encoder = CustomJSONEncoder  # Özel JSON encoder'ı kullan
 
-# CORS yapılandırması - Belirli kaynaklardan gelen isteklere izin ver
-CORS(app, resources={
-    r"/api/*": {
-        "origins": ["http://100.26.61.207:3000", "http://localhost:3000"],
-        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        "allow_headers": ["Content-Type", "Authorization"]
-    }
-})
+# En basit CORS yapılandırması
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 # socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -82,6 +89,14 @@ app.register_blueprint(report_bp, url_prefix='/api/reports')
 # Auth blueprintini kaydet - isim çakışmasını önlemek için farklı bir isim ver
 from controllers.user_controller import user_bp as auth_bp
 app.register_blueprint(auth_bp, url_prefix='/api/auth', name='auth')
+
+# OPTIONS istekleri için özel handler
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # Ana root endpoint
 @app.route('/')

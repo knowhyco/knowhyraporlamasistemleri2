@@ -275,7 +275,7 @@ def run_report(payload):
         
         # TABLE_NAME parametresini her zaman ekle
         if 'TABLE_NAME' not in param_values:
-        param_values['TABLE_NAME'] = table_name
+            param_values['TABLE_NAME'] = table_name
             
         # Eksik parametreler için varsayılan değerler ata
         for param in extracted_params:
@@ -336,10 +336,10 @@ def run_report(payload):
                     'message': f'Sorgu hatası: SQL sözdizimi hatası. Rapor SQL kodu hatalı olabilir. Detay: {error_message}'
                 }), 400
             else:
-            return jsonify({
-                'status': 'error',
+                return jsonify({
+                    'status': 'error',
                     'message': f'Sorgu çalıştırma hatası: {error_message}'
-            }), 500
+                }), 500
         
     except Exception as e:
         logging.error(f"Rapor çalıştırma hatası: {e}")
@@ -519,28 +519,166 @@ def get_system_summary(payload):
                 'context_usage': {
                     'used': result_context['context_used'] if result_context else 0,
                     'not_used': result_context['context_not_used'] if result_context else 0,
-                    'percentage': result_context['context_usage_percentage'] if result_context else 0
+                    'percentage': float(result_context['context_usage_percentage']) if result_context else 0
                 },
                 'active_sessions': result_active['active_sessions'] if result_active else 0,
                 'weekly_activity': weekly_activity
-        }
-        
-        return jsonify({
-            'status': 'success',
+            }
+            
+            return jsonify({
+                'status': 'success',
                 'summary': summary
-        })
-        
-    except Exception as e:
+            })
+            
+        except Exception as e:
             logging.error(f"Özet istatistikler sorgulanırken hata: {e}")
             return jsonify({
                 'status': 'error',
                 'message': f'Özet istatistikler sorgulanırken hata: {str(e)}'
-        }), 500
-        
+            }), 500
+            
     except Exception as e:
         logging.error(f"Sistem özeti getirme hatası: {e}")
         logging.error(traceback.format_exc())
         return jsonify({
             'status': 'error',
             'message': f'Sistem özeti getirme hatası: {str(e)}'
+        }), 500
+
+@report_bp.route('/favorites', methods=['GET'])
+@auth_required
+def get_favorite_reports(payload):
+    """
+    Kullanıcının favori raporlarını listeler
+    """
+    try:
+        user_id = payload['sub']
+        
+        # Favori raporları getir
+        query = f"""
+        SELECT r.id, r.report_name, r.display_name, r.description, r.parameters, r.is_active
+        FROM {SYSTEM_TABLE_PREFIX}reports r
+        JOIN {SYSTEM_TABLE_PREFIX}favorites f ON r.id = f.report_id
+        WHERE f.user_id = %s AND r.is_active = true
+        ORDER BY r.display_name
+        """
+        
+        # Eğer favorites tablosu yoksa veya başka bir DB hatası olursa boş liste dön
+        try:
+            favorites = execute_query(query, (user_id,))
+        except Exception as e:
+            logging.error(f"Favoriler sorgulanırken hata: {e}")
+            favorites = []
+        
+        # Verileri formatlama
+        formatted_favorites = []
+        for report in favorites:
+            # parameters alanını JSON'dan Python dict'e çevir
+            if isinstance(report['parameters'], str):
+                try:
+                    params = json.loads(report['parameters'])
+                except:
+                    params = {}
+            else:
+                params = report['parameters'] or {}
+            
+            formatted_favorites.append({
+                'id': report['id'],
+                'report_name': report['report_name'],
+                'display_name': report['display_name'],
+                'description': report['description'],
+                'parameters': params,
+                'is_active': report['is_active'],
+                'is_favorite': True
+            })
+        
+        return jsonify({
+            'status': 'success',
+            'favorites': formatted_favorites
+        })
+        
+    except Exception as e:
+        logging.error(f"Favori raporlar listelenirken hata: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'success',
+            'favorites': [],
+            'warning': f'Favori raporlar listelenirken hata oluştu: {str(e)}'
+        })
+
+@report_bp.route('/toggle-favorite/<int:report_id>', methods=['POST'])
+@auth_required
+def toggle_favorite(payload, report_id):
+    """
+    Belirli bir raporu favorilere ekler veya çıkarır
+    """
+    try:
+        user_id = payload['sub']
+        
+        # Favoriler tablosunun varlığını kontrol et
+        check_query = f"""
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = '{SYSTEM_TABLE_PREFIX}favorites'
+        ) as table_exists
+        """
+        
+        result = execute_query(check_query, fetch_all=False)
+        
+        # Tablo yoksa oluştur
+        if not result['table_exists']:
+            create_table_query = f"""
+            CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}favorites (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                report_id INTEGER NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, report_id)
+            )
+            """
+            execute_query(create_table_query, commit=True)
+        
+        # Favori durumunu kontrol et
+        check_favorite_query = f"""
+        SELECT EXISTS (
+            SELECT 1 FROM {SYSTEM_TABLE_PREFIX}favorites 
+            WHERE user_id = %s AND report_id = %s
+        ) as is_favorite
+        """
+        
+        favorite_result = execute_query(check_favorite_query, (user_id, report_id), fetch_all=False)
+        is_favorite = favorite_result['is_favorite']
+        
+        if is_favorite:
+            # Favorilerden çıkar
+            remove_query = f"""
+            DELETE FROM {SYSTEM_TABLE_PREFIX}favorites 
+            WHERE user_id = %s AND report_id = %s
+            """
+            execute_query(remove_query, (user_id, report_id), commit=True)
+            message = "Rapor favorilerden çıkarıldı"
+            is_favorite = False
+        else:
+            # Favorilere ekle
+            add_query = f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}favorites (user_id, report_id)
+            VALUES (%s, %s)
+            ON CONFLICT (user_id, report_id) DO NOTHING
+            """
+            execute_query(add_query, (user_id, report_id), commit=True)
+            message = "Rapor favorilere eklendi"
+            is_favorite = True
+        
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'is_favorite': is_favorite
+        })
+        
+    except Exception as e:
+        logging.error(f"Favori durumu değiştirilirken hata: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Favori durumu değiştirilirken hata oluştu: {str(e)}'
         }), 500 
