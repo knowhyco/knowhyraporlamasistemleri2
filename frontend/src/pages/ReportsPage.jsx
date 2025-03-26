@@ -184,6 +184,15 @@ const ReportsPage = () => {
   const [timeRange, setTimeRange] = useState('24h');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(30000); // 30 saniye
+  const [dashboardData, setDashboardData] = useState({
+    totalSessions: 0,
+    totalMessages: 0,
+    activeSessions: 0,
+    contextRate: 0,
+    sessionDuration: 0,
+    messageByTime: [],
+    topTopics: []
+  });
 
   // Tema renkleri
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -194,13 +203,16 @@ const ReportsPage = () => {
   const hoverBg = useColorModeValue('gray.50', 'gray.600');
 
   // Responsive değerler
-  const isMobile = useBreakpointValue({ base: true, md: false });
-  const gridColumns = useBreakpointValue({ base: 1, md: 2, lg: 3 });
+  const isMobile = useBreakpointValue({ base: true, md: false }) ?? true;
+  const gridColumns = useBreakpointValue({ base: 1, md: 2, lg: 3 }) ?? 1;
   
   // Raporları getir
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log("Fetching dashboard data...");
+        setLoading(true);
+        
         const [reportsRes, favoritesRes, summaryRes] = await Promise.all([
           api.get('/reports/list'),
           api.get('/reports/favorites'),
@@ -208,14 +220,36 @@ const ReportsPage = () => {
         ]);
 
         if (reportsRes.data.status === 'success') {
+          console.log("Reports fetched:", reportsRes.data.reports);
           setReports(reportsRes.data.reports || []);
         }
+        
         if (favoritesRes.data.status === 'success') {
+          console.log("Favorites fetched:", favoritesRes.data.favorites);
           setFavorites(favoritesRes.data.favorites || []);
         }
+        
         if (summaryRes.data.status === 'success') {
+          console.log("Summary data fetched:", summaryRes.data.summary);
           setSummaryData(summaryRes.data.summary);
       }
+        
+        // Örnek dashboard verisi
+        setDashboardData({
+          totalSessions: 1208,
+          totalMessages: 15789,
+          activeSessions: 42,
+          contextRate: 68,
+          sessionDuration: 12.5,
+          messageByTime: [25, 40, 35, 50, 49, 60, 70, 91, 125, 130, 101, 90, 85, 100, 120, 85, 75, 80, 85, 70, 65, 45, 30, 20],
+          topTopics: [
+            { name: 'Çalışma Saatleri', count: 245 },
+            { name: 'Bilet Fiyatları', count: 198 },
+            { name: 'Osmanlı Dönemi', count: 156 },
+            { name: 'Deniz Araçları', count: 134 },
+            { name: 'Atatürk', count: 112 }
+          ]
+        });
     } catch (err) {
         console.error('Error fetching data:', err);
         setError('Veriler yüklenirken bir hata oluştu');
@@ -248,108 +282,34 @@ const ReportsPage = () => {
 
   // Raporları filtrele
   const filteredReports = useMemo(() => {
-    return reports.filter(report => {
-      const searchLower = searchTerm.toLowerCase();
-      return (
-        (report?.display_name?.toLowerCase() || '').includes(searchLower) ||
-        (report?.description?.toLowerCase() || '').includes(searchLower) ||
-        (report?.category?.toLowerCase() || '').includes(searchLower)
-      );
-    });
+    if (!searchTerm.trim()) return reports;
+    
+    return reports.filter(report => 
+      report.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.description.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   }, [reports, searchTerm]);
 
-  // Özet grafik verileri
-  const summaryChartData = useMemo(() => ({
-    labels: ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'],
-    datasets: [
-      {
-        label: 'Haftalık Aktivite',
-        data: summaryData?.weekly_activity || [0, 0, 0, 0, 0, 0, 0],
-        borderColor: accentColor,
-        backgroundColor: `${accentColor}20`,
-        fill: true,
-        tension: 0.4,
-      }
-    ]
-  }), [summaryData, accentColor]);
-
-  const pieChartData = useMemo(() => ({
-    labels: ['Context Kullanılan', 'Context Kullanılmayan'],
-    datasets: [
-      {
-        data: [
-          summaryData?.context_usage?.used || 0,
-          summaryData?.context_usage?.not_used || 0
-        ],
-        backgroundColor: [accentColor, `${accentColor}40`],
-        borderWidth: 0,
-      }
-    ]
-  }), [summaryData, accentColor]);
-
-  const barChartData = useMemo(() => ({
-    labels: ['00-04', '04-08', '08-12', '12-16', '16-20', '20-24'],
-    datasets: [
-      {
-        label: 'Saatlik Dağılım',
-        data: summaryData?.hourly_distribution || [0, 0, 0, 0, 0, 0],
-        backgroundColor: accentColor,
-        borderRadius: 4,
-      }
-    ]
-  }), [summaryData, accentColor]);
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: 'top',
-        labels: {
-          usePointStyle: true,
-          padding: 20,
-        }
-      },
-      tooltip: {
-        mode: 'index',
-        intersect: false,
-        padding: 10,
-        backgroundColor: cardBg,
-        titleColor: textColor,
-        bodyColor: textColor,
-        borderColor: borderColor,
-        borderWidth: 1,
-        cornerRadius: 8,
-      }
-    },
-    interaction: {
-      mode: 'nearest',
-      axis: 'x',
-      intersect: false
-    }
+  // Rapor detayına git
+  const handleReportClick = (report) => {
+    navigate(`/reports/${report.report_name}`);
   };
-  
-  // Favori ekle/çıkar
+
+  // Favorilere ekle/çıkar
   const handleToggleFavorite = async (report) => {
     try {
       const isFavorite = favorites.includes(report.report_name);
-      const endpoint = isFavorite ? '/reports/remove-favorite' : '/reports/add-favorite';
       
-      const response = await api.post(endpoint, { report_id: report.report_name });
-      
-      if (response.data && response.data.status === 'success') {
+      // Favorilere ekle veya çıkar
         if (isFavorite) {
           setFavorites(favorites.filter(id => id !== report.report_name));
         } else {
           setFavorites([...favorites, report.report_name]);
         }
-        toast({
-          title: isFavorite ? 'Favorilerden Çıkarıldı' : 'Favorilere Eklendi',
-          status: 'success',
-          duration: 2000,
-          isClosable: true,
-        });
-      }
+      
+      // API isteği
+      await api.post(`/reports/${isFavorite ? 'unfavorite' : 'favorite'}/${report.report_name}`);
+      
     } catch (err) {
       console.error('Error toggling favorite:', err);
       toast({
@@ -373,256 +333,344 @@ const ReportsPage = () => {
           <ModalHeader>{report.display_name}</ModalHeader>
           <ModalCloseButton />
           <ModalBody pb={6}>
-            <VStack spacing={4} align="stretch">
-              <Text color={textColor}>{report.description}</Text>
-              <HStack spacing={2}>
-                <Badge colorScheme="blue">{report.category}</Badge>
-                {report.is_active && (
-                  <Badge colorScheme="green">Aktif</Badge>
-                )}
-              </HStack>
+            <Text mb={4}>{report.description}</Text>
+            <Divider my={3} />
+            <Heading size="sm" mb={2}>Parametreler</Heading>
+            {report.parameters && Object.keys(report.parameters).length > 0 ? (
+              <SimpleGrid columns={2} spacing={4}>
+                {Object.entries(report.parameters).map(([key, value]) => (
+                  <Box key={key}>
+                    <Text fontWeight="bold">{key}</Text>
+                    <Text>{value || 'Varsayılan'}</Text>
+                  </Box>
+                ))}
+              </SimpleGrid>
+            ) : (
+              <Text>Bu rapor parametre gerektirmez.</Text>
+            )}
+            
               <Button
+              mt={6} 
                 colorScheme="blue"
                 onClick={() => {
                   onClose();
-                  navigate(`/reports/${report.report_name}`);
+                handleReportClick(report);
                 }}
+              width="full"
               >
                 Raporu Görüntüle
               </Button>
-            </VStack>
           </ModalBody>
         </ModalContent>
       </Modal>
     );
   };
 
-  // Mobil menü
-  const MobileMenu = () => (
-    <Drawer
-      isOpen={isMobileMenuOpen}
-      placement="left"
-      onClose={() => setIsMobileMenuOpen(false)}
-      size="xs"
-    >
-      <DrawerOverlay />
-      <DrawerContent>
-        <DrawerCloseButton />
-        <DrawerHeader>Menü</DrawerHeader>
-        <DrawerBody>
-          <VStack spacing={4} align="stretch">
-            <Button
-              leftIcon={<ViewIcon />}
-              onClick={() => {
-                setViewMode(viewMode === 'grid' ? 'list' : 'grid');
-                setIsMobileMenuOpen(false);
-              }}
-            >
-              {viewMode === 'grid' ? 'Liste Görünümü' : 'Grid Görünümü'}
-            </Button>
-            <Button
-              leftIcon={<RepeatIcon />}
-              onClick={() => {
-                setAutoRefresh(!autoRefresh);
-                setIsMobileMenuOpen(false);
-              }}
-            >
-              Otomatik Yenileme: {autoRefresh ? 'Açık' : 'Kapalı'}
-            </Button>
-            <Button
-              leftIcon={<CalendarIcon />}
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Zaman Aralığı: {timeRange}
-            </Button>
-          </VStack>
-        </DrawerBody>
-      </DrawerContent>
-    </Drawer>
-  );
-    
-    return (
-    <Container maxW="container.xl" py={8}>
-      {/* Üst Bar */}
-      <Flex mb={8} align="center" justify="space-between">
-        <HStack spacing={4}>
-          {isMobile && (
-            <IconButton
-              icon={<HamburgerIcon />}
-              aria-label="Menu"
-              onClick={() => setIsMobileMenuOpen(true)}
-              variant="ghost"
-            />
-          )}
-          <Heading size="lg">Raporlar</Heading>
-        </HStack>
-        <HStack spacing={4}>
-          {!isMobile && (
-            <>
-              <Button
-                leftIcon={viewMode === 'grid' ? <ViewIcon /> : <ViewOffIcon />}
-                onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                variant="ghost"
-              >
-                {viewMode === 'grid' ? 'Liste' : 'Grid'}
-              </Button>
-              <Button
-                leftIcon={<RepeatIcon />}
-                onClick={() => setAutoRefresh(!autoRefresh)}
-                variant="ghost"
-                colorScheme={autoRefresh ? 'green' : 'gray'}
-              >
-                Otomatik Yenileme
-              </Button>
-              <Menu>
-                <MenuButton
-                  as={Button}
-                  rightIcon={<ChevronDownIcon />}
-                  leftIcon={<CalendarIcon />}
-                  variant="ghost"
-                >
-                  {timeRange}
-                </MenuButton>
-                <MenuList>
-                  <MenuItem onClick={() => setTimeRange('1h')}>Son 1 Saat</MenuItem>
-                  <MenuItem onClick={() => setTimeRange('24h')}>Son 24 Saat</MenuItem>
-                  <MenuItem onClick={() => setTimeRange('7d')}>Son 7 Gün</MenuItem>
-                  <MenuItem onClick={() => setTimeRange('30d')}>Son 30 Gün</MenuItem>
-                </MenuList>
-              </Menu>
-            </>
-          )}
-        </HStack>
-      </Flex>
+  // Saatlik mesaj aktivitesi grafik verisi
+  const hourlyActivityData = {
+    labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+    datasets: [
+      {
+        label: 'Mesaj Sayısı',
+        data: dashboardData.messageByTime,
+        fill: true,
+        backgroundColor: 'rgba(66, 153, 225, 0.2)',
+        borderColor: 'rgba(66, 153, 225, 1)',
+        tension: 0.4
+      }
+    ]
+  };
 
-      {/* Özet Kartları */}
-      <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={6} mb={8}>
-        <MotionBox
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
-          <Card bg={cardBg} borderWidth="1px" borderColor={borderColor} _hover={{ shadow: 'lg' }}>
+  // En çok konuşulan konular pasta grafik verisi
+  const topTopicsData = {
+    labels: dashboardData.topTopics.map(t => t.name),
+    datasets: [
+      {
+        data: dashboardData.topTopics.map(t => t.count),
+        backgroundColor: [
+          'rgba(255, 99, 132, 0.7)',
+          'rgba(54, 162, 235, 0.7)',
+          'rgba(255, 206, 86, 0.7)',
+          'rgba(75, 192, 192, 0.7)',
+          'rgba(153, 102, 255, 0.7)'
+        ],
+        borderWidth: 1
+      }
+    ]
+  };
+
+  // Dashboard özet widgetleri
+  const renderDashboardSummary = () => (
+    <SimpleGrid columns={{base: 1, md: 2, lg: 4}} spacing={5} mb={8}>
+      <Card>
             <CardBody>
               <Stat>
                 <StatLabel>Toplam Oturum</StatLabel>
-                <StatNumber>{summaryData?.total_sessions || 0}</StatNumber>
+            <StatNumber>{dashboardData.totalSessions.toLocaleString()}</StatNumber>
                 <StatHelpText>
                   <StatArrow type="increase" />
-                  Son 24 saat: +{summaryData?.new_sessions || 0}
+              23% son haftada
                 </StatHelpText>
               </Stat>
             </CardBody>
           </Card>
-        </MotionBox>
-
-        <MotionBox
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-        >
-          <Card bg={cardBg} borderWidth="1px" borderColor={borderColor} _hover={{ shadow: 'lg' }}>
+      
+      <Card>
             <CardBody>
               <Stat>
                 <StatLabel>Toplam Mesaj</StatLabel>
-                <StatNumber>{summaryData?.total_messages || 0}</StatNumber>
+            <StatNumber>{dashboardData.totalMessages.toLocaleString()}</StatNumber>
                 <StatHelpText>
-                  Ortalama: {summaryData?.avg_messages_per_session || 0}/oturum
+              <StatArrow type="increase" />
+              18% son haftada
                 </StatHelpText>
               </Stat>
             </CardBody>
           </Card>
-        </MotionBox>
-
-        <MotionBox
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
-          <Card bg={cardBg} borderWidth="1px" borderColor={borderColor} _hover={{ shadow: 'lg' }}>
+      
+      <Card>
             <CardBody>
               <Stat>
-                <StatLabel>Context Kullanımı</StatLabel>
-                <StatNumber>%{summaryData?.context_usage_percentage || 0}</StatNumber>
+            <StatLabel>Aktif Oturumlar</StatLabel>
+            <StatNumber>{dashboardData.activeSessions}</StatNumber>
                 <StatHelpText>
-                  Son 24 saat: %{summaryData?.recent_context_usage || 0}
+              <HStack>
+                <Icon as={TimeIcon} />
+                <Text>Son 24 saatte</Text>
+              </HStack>
                 </StatHelpText>
               </Stat>
             </CardBody>
           </Card>
-        </MotionBox>
-
-        <MotionBox
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.3 }}
-        >
-          <Card bg={cardBg} borderWidth="1px" borderColor={borderColor} _hover={{ shadow: 'lg' }}>
+      
+      <Card>
             <CardBody>
               <Stat>
-                <StatLabel>Ortalama Yanıt Süresi</StatLabel>
-                <StatNumber>{summaryData?.avg_response_time || 0}s</StatNumber>
+            <StatLabel>Context Kullanımı</StatLabel>
+            <StatNumber>{dashboardData.contextRate}%</StatNumber>
                 <StatHelpText>
-                  Son 1 saat: {summaryData?.recent_response_time || 0}s
+              <StatArrow type="increase" />
+              12% önceki aya göre
                 </StatHelpText>
               </Stat>
             </CardBody>
           </Card>
-        </MotionBox>
       </SimpleGrid>
+  );
 
-      {/* Grafikler */}
-      <Card bg={cardBg} borderWidth="1px" borderColor={borderColor} mb={8}>
+  // Dashboard grafikleri
+  const renderDashboardCharts = () => (
+    <Grid templateColumns={{base: "1fr", lg: "1fr 1fr"}} gap={6} mb={8}>
+      <Card>
         <CardHeader>
-          <Tabs onChange={(index) => setSelectedTab(index)}>
-            <TabList>
-              <Tab>
-                <Icon as={LineChartIcon} mr={2} />
-                Aktivite Trendi
-              </Tab>
-              <Tab>
-                <Icon as={PieChartIcon} mr={2} />
-                Context Analizi
-              </Tab>
-              <Tab>
-                <Icon as={BarChartIcon} mr={2} />
-                Saatlik Dağılım
-              </Tab>
-            </TabList>
-          </Tabs>
+          <Heading size="md">Saatlik Mesaj Aktivitesi</Heading>
         </CardHeader>
         <CardBody>
-          <Box h="400px">
-            <AnimatePresence mode="wait">
-              {selectedTab === 0 && (
-                <ScaleFade in={true}>
-                  <Line data={summaryChartData} options={chartOptions} />
-                </ScaleFade>
-              )}
-              {selectedTab === 1 && (
-                <ScaleFade in={true}>
-                  <Doughnut data={pieChartData} options={chartOptions} />
-                </ScaleFade>
-              )}
-              {selectedTab === 2 && (
-                <ScaleFade in={true}>
-                  <Bar data={barChartData} options={chartOptions} />
-                </ScaleFade>
-              )}
-            </AnimatePresence>
+          <Box h="300px">
+            <Line 
+              data={hourlyActivityData} 
+              options={{
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false
+                  }
+                },
+                scales: {
+                  y: {
+                    beginAtZero: true
+                  }
+                }
+              }} 
+            />
           </Box>
         </CardBody>
       </Card>
 
-      {/* Rapor Listesi */}
-      <Card bg={cardBg} borderWidth="1px" borderColor={borderColor}>
+      <Card>
         <CardHeader>
-          <Flex align="center" mb={4}>
-            <Heading size="md">Raporlar</Heading>
+          <Heading size="md">En Çok Konuşulan Konular</Heading>
+        </CardHeader>
+        <CardBody>
+          <Box h="300px" display="flex" alignItems="center" justifyContent="center">
+            <Box maxWidth="250px" width="100%">
+              <Doughnut 
+                data={topTopicsData} 
+                options={{
+                  maintainAspectRatio: false,
+                  plugins: {
+                    legend: {
+                      position: 'right'
+                    }
+                  }
+                }} 
+              />
+            </Box>
+          </Box>
+        </CardBody>
+      </Card>
+    </Grid>
+  );
+
+  // Son aktiviteler
+  const renderRecentActivity = () => (
+    <Card mb={8}>
+      <CardHeader>
+        <Heading size="md">Son Aktiviteler</Heading>
+      </CardHeader>
+      <CardBody>
+        <VStack align="stretch" spacing={4}>
+          {Array.from({length: 5}).map((_, i) => (
+            <HStack key={i} p={2} borderWidth="1px" borderRadius="md">
+              <Icon as={i % 2 === 0 ? CheckIcon : InfoIcon} color={i % 2 === 0 ? "green.500" : "blue.500"} />
+              <Box>
+                <Text fontWeight="bold">
+                  {i % 2 === 0 ? "Yeni oturum başlatıldı" : "Rapor çalıştırıldı"}
+                </Text>
+                <Text fontSize="sm" color="gray.500">
+                  {new Date(Date.now() - i * 3600000).toLocaleString()}
+                </Text>
+              </Box>
+              <Spacer />
+              <Badge colorScheme={i % 2 === 0 ? "green" : "blue"}>
+                {i % 2 === 0 ? "Oturum" : "Rapor"}
+              </Badge>
+            </HStack>
+          ))}
+        </VStack>
+      </CardBody>
+    </Card>
+  );
+
+  // Rapor listesi
+  const renderReportList = () => (
+    <SimpleGrid columns={{base: 1, md: 2, lg: 3}} spacing={5}>
+      {filteredReports.map(report => (
+        <Card 
+          key={report.report_name}
+          cursor="pointer"
+          _hover={{ 
+            transform: 'translateY(-5px)', 
+            boxShadow: 'xl',
+            borderColor: accentColor
+          }}
+          transition="all 0.3s"
+          borderWidth="1px"
+          onClick={() => handleReportClick(report)}
+        >
+          <CardHeader pb={0}>
+            <Flex>
+              <Heading size="md" isTruncated>{report.display_name}</Heading>
+              <Spacer />
+              <IconButton
+                icon={favorites.includes(report.report_name) ? <StarIcon /> : <StarOutlineIcon />}
+                variant="ghost"
+                aria-label="Favorite"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleFavorite(report);
+                }}
+                color={favorites.includes(report.report_name) ? "yellow.500" : "gray.400"}
+              />
+            </Flex>
+          </CardHeader>
+          <CardBody>
+            <Text noOfLines={2} mb={4}>{report.description}</Text>
+            <HStack spacing={2}>
+              <Badge colorScheme="blue">Güncel</Badge>
+              {report.parameters && Object.keys(report.parameters).length > 0 && (
+                <Badge colorScheme="purple">Parametreli</Badge>
+              )}
+              {report.is_registered && (
+                <Badge colorScheme="green">Kayıtlı</Badge>
+              )}
+            </HStack>
+          </CardBody>
+        </Card>
+      ))}
+    </SimpleGrid>
+  );
+
+  // Yükleniyor göstergesi
+  if (loading) {
+    return (
+      <Container maxW="container.xl" py={8}>
+        <Heading mb={6}>Dashboard</Heading>
+        <SimpleGrid columns={{base: 1, md: 2, lg: 4}} spacing={5} mb={8}>
+          {Array.from({length: 4}).map((_, i) => (
+            <Skeleton key={i} height="100px" borderRadius="md" />
+          ))}
+        </SimpleGrid>
+        <Grid templateColumns={{base: "1fr", lg: "1fr 1fr"}} gap={6} mb={8}>
+          <Skeleton height="300px" borderRadius="md" />
+          <Skeleton height="300px" borderRadius="md" />
+        </Grid>
+        <SimpleGrid columns={{base: 1, md: 2, lg: 3}} spacing={5}>
+          {Array.from({length: 6}).map((_, i) => (
+            <Skeleton key={i} height="200px" borderRadius="md" />
+          ))}
+        </SimpleGrid>
+      </Container>
+    );
+  }
+
+  return (
+    <Container maxW="container.xl" py={8}>
+      <HStack mb={6}>
+        <Heading>Knowhy Raporlama</Heading>
             <Spacer />
-            <InputGroup maxW="300px">
+        <HStack spacing={4}>
+          <IconButton
+            icon={<RepeatIcon />}
+            aria-label="Yenile"
+            onClick={() => window.location.reload()}
+          />
+          <Menu>
+            <MenuButton 
+              as={Button} 
+              rightIcon={<ChevronDownIcon />}
+              variant="outline"
+            >
+              {timeRange === '24h' ? 'Son 24 Saat' : 
+               timeRange === '7d' ? 'Son 7 Gün' : 
+               timeRange === '30d' ? 'Son 30 Gün' : 'Özel'}
+            </MenuButton>
+            <MenuList>
+              <MenuItem onClick={() => setTimeRange('24h')}>Son 24 Saat</MenuItem>
+              <MenuItem onClick={() => setTimeRange('7d')}>Son 7 Gün</MenuItem>
+              <MenuItem onClick={() => setTimeRange('30d')}>Son 30 Gün</MenuItem>
+              <MenuItem onClick={() => setTimeRange('custom')}>Özel Aralık</MenuItem>
+            </MenuList>
+          </Menu>
+        </HStack>
+      </HStack>
+
+      <Tabs 
+        variant="enclosed" 
+        colorScheme="blue" 
+        index={selectedTab}
+        onChange={setSelectedTab}
+        mb={6}
+      >
+        <TabList>
+          <Tab>Dashboard</Tab>
+          <Tab>Raporlar</Tab>
+          <Tab>Favoriler</Tab>
+        </TabList>
+        
+        <TabPanels mt={4}>
+          {/* Dashboard Paneli */}
+          <TabPanel p={0}>
+            {renderDashboardSummary()}
+            {renderDashboardCharts()}
+            {renderRecentActivity()}
+          </TabPanel>
+          
+          {/* Raporlar Paneli */}
+          <TabPanel p={0}>
+            <InputGroup mb={6}>
               <InputLeftElement pointerEvents="none">
-                <SearchIcon color="gray.400" />
+                <SearchIcon color="gray.300" />
               </InputLeftElement>
               <Input
                 placeholder="Rapor ara..."
@@ -630,94 +678,81 @@ const ReportsPage = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </InputGroup>
-          </Flex>
-        </CardHeader>
-        <CardBody>
-          {loading ? (
-            <Stack spacing={4}>
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} height="100px" />
-              ))}
-            </Stack>
-          ) : error ? (
-            <Alert status="error">
+            
+            {filteredReports.length === 0 ? (
+              <Alert status="info">
+                <AlertIcon />
+                <AlertTitle>Rapor bulunamadı</AlertTitle>
+                <AlertDescription>Arama kriterlerinize uygun rapor bulunmamaktadır.</AlertDescription>
+              </Alert>
+            ) : renderReportList()}
+          </TabPanel>
+          
+          {/* Favoriler Paneli */}
+          <TabPanel p={0}>
+            {favorites.length === 0 ? (
+              <Alert status="info">
               <AlertIcon />
-              <AlertTitle>Hata!</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+                <AlertTitle>Favori rapor yok</AlertTitle>
+                <AlertDescription>Henüz favori rapor eklemediniz. Raporlar sekmesinden favori ekleyebilirsiniz.</AlertDescription>
             </Alert>
           ) : (
-            <Grid
-              templateColumns={
-                viewMode === 'grid'
-                  ? { base: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }
-                  : '1fr'
-              }
-              gap={6}
-            >
-              {filteredReports.map((report, index) => (
-                <MotionBox
-                  key={report.id || report.report_name}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
+              <SimpleGrid columns={{base: 1, md: 2, lg: 3}} spacing={5}>
+                {filteredReports
+                  .filter(report => favorites.includes(report.report_name))
+                  .map(report => (
                   <Card
-                    bg={cardBg}
+                      key={report.report_name}
+                      cursor="pointer"
+                      _hover={{ 
+                        transform: 'translateY(-5px)', 
+                        boxShadow: 'xl',
+                        borderColor: 'yellow.500'
+                      }}
+                      transition="all 0.3s"
                     borderWidth="1px"
-                    borderColor={borderColor}
-                    _hover={{ transform: 'translateY(-2px)', shadow: 'lg' }}
-                    transition="all 0.2s"
-                  >
-                    <CardBody>
-                      <VStack align="stretch" spacing={3}>
-                        <Flex justify="space-between" align="center">
-                          <Heading size="sm">{report.display_name}</Heading>
-                          <Tooltip label={favorites.includes(report.report_name) ? 'Favorilerden Çıkar' : 'Favorilere Ekle'}>
+                      borderColor="yellow.500"
+                      onClick={() => handleReportClick(report)}
+                    >
+                      <CardHeader pb={0}>
+                        <Flex>
+                          <Heading size="md" isTruncated>{report.display_name}</Heading>
+                          <Spacer />
                             <IconButton
-                              icon={favorites.includes(report.report_name) ? <StarIcon /> : <StarOutlineIcon />}
-                              aria-label="Toggle favorite"
+                            icon={<StarIcon />}
                               variant="ghost"
-                              colorScheme={favorites.includes(report.report_name) ? 'yellow' : 'gray'}
-                              onClick={() => handleToggleFavorite(report)}
-                            />
-                          </Tooltip>
+                            color="yellow.500"
+                            aria-label="Remove favorite"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleFavorite(report);
+                            }}
+                          />
                         </Flex>
-                        <Text color={textColor} noOfLines={2}>
-                          {report.description}
-                        </Text>
+                      </CardHeader>
+                      <CardBody>
+                        <Text noOfLines={2} mb={4}>{report.description}</Text>
                         <HStack spacing={2}>
-                          <Badge colorScheme="blue">{report.category}</Badge>
-                          {report.is_active && (
-                            <Badge colorScheme="green">Aktif</Badge>
+                          <Badge colorScheme="blue">Güncel</Badge>
+                          {report.parameters && Object.keys(report.parameters).length > 0 && (
+                            <Badge colorScheme="purple">Parametreli</Badge>
                           )}
                         </HStack>
-                        <Button
-                          colorScheme="blue"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedReport(report);
-                            onOpen();
-                          }}
-                        >
-                          Detayları Gör
-                  </Button>
-                      </VStack>
                     </CardBody>
                   </Card>
-                </MotionBox>
               ))}
-            </Grid>
+              </SimpleGrid>
           )}
-        </CardBody>
-      </Card>
+          </TabPanel>
+        </TabPanels>
+      </Tabs>
 
+      {/* Rapor Detay Modalı */}
       <ReportDetailModal
         report={selectedReport}
         isOpen={isOpen}
         onClose={onClose}
       />
-
-      <MobileMenu />
     </Container>
   );
 };

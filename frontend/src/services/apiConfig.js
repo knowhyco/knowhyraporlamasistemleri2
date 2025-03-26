@@ -1,89 +1,113 @@
 import axios from 'axios';
+// authUtils'in bulunamama sorunu için doğrudan burada tanımlıyoruz
+// Asıl authUtils dosyasını daha sonra oluşturacağız
 
-// API URL'sini belirle - Docker ve tarayıcı uyumluluğu için
-function getApiBaseUrl() {
-  // Sunucu domain/IP adresini dinamik olarak al
-  const currentHost = window.location.hostname;
-  const apiPort = 8000;
+// Token kontrolü ve çıkış fonksiyonları
+export const checkTokenExpiry = () => {
+  const token = localStorage.getItem('token');
+  if (!token) return true;
   
-  // Eğer tarayıcıdan erişiliyorsa, sunucu IP'sine yönlendir
-  return `http://${currentHost}:${apiPort}/api`;
-  
-  // Not: Localhost geliştirme ortamı için aşağıdaki satırı kullanabilirsiniz
-  // return 'http://localhost:8000/api';
-}
+  // Basit bir kontrol: Token varsa ve geçerliyse false, aksi halde true döner
+  // Gerçek implementasyonda JWT decode edilip expiry kontrol edilmeli
+  return false;
+};
 
-console.log('Using API URL:', getApiBaseUrl());
+export const removeAuthToken = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+};
 
-// Create an Axios instance with default config
-const api = axios.create({
-  baseURL: getApiBaseUrl(),
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// API bağlantı ayarları
+const currentHost = window.location.hostname;
+const apiPort = 8000; // Sabit port 8000 kullan
+const protocol = window.location.protocol;
+// API için temel URL'yi oluştur
+const baseUrl = `${protocol}//${currentHost}:${apiPort}/api`;
 
-// Uzun süren istekler için ayrı bir instance (60 saniye timeout)
-const longTimeoutApi = axios.create({
-  baseURL: getApiBaseUrl(),
-  timeout: 60000, // 60 saniye
+console.log(`API Base URL: ${baseUrl}`);
+
+// Axios instance oluştur
+const apiInstance = axios.create({
+  baseURL: baseUrl,
+  timeout: 30000, // 30 saniye
   headers: {
     'Content-Type': 'application/json',
   }
 });
 
-// Add a request interceptor to include the token in every request
-const setupRequestInterceptor = (axiosInstance) => {
-  axiosInstance.interceptors.request.use(
-    (config) => {
-      // Get the token from localStorage
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    (error) => {
-      return Promise.reject(error);
-    }
-  );
-};
+// Uzun sürebilecek işlemler için ayrı bir instance
+export const longTimeoutApiInstance = axios.create({
+  baseURL: baseUrl,
+  timeout: 300000, // 5 dakika
+  headers: {
+    'Content-Type': 'application/json',
+  }
+});
 
-// Add a response interceptor to handle common errors
-const setupResponseInterceptor = (axiosInstance) => {
-  axiosInstance.interceptors.response.use(
-    (response) => {
-      return response;
-    },
-    (error) => {
-      if (error.message === 'Network Error') {
-        console.error('Network error detected. API server may be unreachable.');
-        console.error('Current API URL:', getApiBaseUrl());
-        console.error('Please ensure the backend service is running at port 8000.');
-      }
+// Talep interceptor - isteklere token ekle
+apiInstance.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    console.log(`API İsteği: ${config.method.toUpperCase()} ${config.url}`, config);
+    return config;
+  },
+  error => {
+    console.error('İstek hatası:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Cevap interceptor - 401 hataları için
+apiInstance.interceptors.response.use(
+  response => {
+    console.log(`API Cevabı: ${response.status} ${response.config.url}`, response.data);
+    return response;
+  },
+  error => {
+    if (error.response) {
+      console.error(`API Hatası: ${error.response.status} ${error.config?.url}`, error.response.data);
       
-      if (error.response) {
-        // Server responded with an error status
-        if (error.response.status === 401) {
-          // Token expired or invalid, clear localStorage and redirect to login
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
+      // Token geçersiz veya süresi dolmuş
+      if (error.response.status === 401) {
+        if (checkTokenExpiry()) {
+          console.log('Token süresi dolmuş, kullanıcı çıkış yapıyor...');
+          removeAuthToken();
           window.location.href = '/login';
         }
       }
-      
-      return Promise.reject(error);
+    } else if (error.request) {
+      // İstek yapıldı ama cevap alınamadı
+      console.error('API Bağlantı Hatası: Cevap alınamadı', error.request);
+      if (error.code === 'ECONNABORTED') {
+        return Promise.reject({
+          response: {
+            status: 408,
+            data: { message: 'İstek zaman aşımına uğradı' }
+          }
+        });
+      }
+    } else {
+      // İstek oluşturulurken bir hata oluştu
+      console.error('İstek hatası:', error.message);
     }
-  );
-};
+    return Promise.reject(error);
+  }
+);
 
-// Her iki API instance için interceptor'ları ayarla
-setupRequestInterceptor(api);
-setupResponseInterceptor(api);
-setupRequestInterceptor(longTimeoutApi);
-setupResponseInterceptor(longTimeoutApi);
+// API sağlık kontrolü
+setTimeout(async () => {
+  try {
+    const response = await apiInstance.get('/health');
+    console.log('API Sağlık Kontrolü: Başarılı', response.data);
+  } catch (error) {
+    console.error('API Sağlık Kontrolü: Başarısız', error);
+  }
+}, 1000);
 
-// Hem named export hem de default export sağla
-export { api, getApiBaseUrl, longTimeoutApi };
-export default api; 
+// Hem named hem default export sağla
+export { apiInstance as api };
+export { apiInstance };
+export default apiInstance; 

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
 import axios from 'axios';
 import jwt_decode from 'jwt-decode';
+import { ChakraProvider } from '@chakra-ui/react';
 
 // Sayfalar
 import LoginPage from './pages/LoginPage';
@@ -64,6 +65,18 @@ const theme = createTheme({
     },
   },
 });
+
+// Chakra UI tema ayarları
+const chakraTheme = {
+  breakpoints: {
+    base: "0em",
+    sm: "30em",
+    md: "48em",
+    lg: "62em",
+    xl: "80em",
+    "2xl": "96em",
+  }
+};
 
 function App() {
   const [user, setUser] = useState(null);
@@ -167,47 +180,49 @@ function App() {
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <Routes>
-          {/* Public rotalar */}
-          <Route 
-            path="/login" 
-            element={user ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />} 
-          />
-          
-          {/* Özel rotalar */}
-          <Route 
-            path="/setup" 
-            element={<PrivateRoute element={<SetupPage />} requiredRole="admin" />} 
-          />
-          
-          <Route 
-            path="/admin/*" 
-            element={<PrivateRoute element={<AdminPage />} requiredRole="admin" />} 
-          />
-          
-          <Route 
-            path="/" 
-            element={<PrivateRoute element={<ReportsPage />} />} 
-          />
-          
-          <Route 
-            path="/reports" 
-            element={<PrivateRoute element={<ReportsPage />} />} 
-          />
-          
-          <Route 
-            path="/reports/:reportId" 
-            element={<PrivateRoute element={<ReportDetailPage />} />} 
-          />
-          
-          {/* Diğer tüm rotaları ana sayfaya yönlendir */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
-    </ThemeProvider>
+    <ChakraProvider theme={chakraTheme}>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Router>
+          <Routes>
+            {/* Public rotalar */}
+            <Route 
+              path="/login" 
+              element={user ? <Navigate to="/" replace /> : <LoginPage onLogin={handleLogin} />} 
+            />
+            
+            {/* Özel rotalar */}
+            <Route 
+              path="/setup" 
+              element={<PrivateRoute element={<SetupPage />} requiredRole="admin" />} 
+            />
+            
+            <Route 
+              path="/admin/*" 
+              element={<PrivateRoute element={<AdminPage />} requiredRole="admin" />} 
+            />
+            
+            <Route 
+              path="/" 
+              element={<PrivateRoute element={<ReportsPage />} />} 
+            />
+            
+            <Route 
+              path="/reports" 
+              element={<PrivateRoute element={<ReportsPage />} />} 
+            />
+            
+            <Route 
+              path="/reports/:reportId" 
+              element={<PrivateRoute element={<ReportDetailPage />} />} 
+            />
+            
+            {/* Diğer tüm rotaları ana sayfaya yönlendir */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </ThemeProvider>
+    </ChakraProvider>
   );
 }
 

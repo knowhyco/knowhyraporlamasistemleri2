@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-navy-900 text-gray-200;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+@layer components {
+  /* Kartlar için ortak stil */
+  .card {
+    @apply bg-navy-800 rounded-xl border border-navy-700 shadow-lg overflow-hidden;
+  }
+
+  /* Hover efekti olan kart */
+  .card-hover {
+    @apply transition-all duration-300 hover:border-navy-600 hover:shadow-accent-blue/10;
+  }
+
+  /* Sidebar link stilleri */
+  .sidebar-link {
+    @apply flex items-center py-2 px-3 rounded-lg text-gray-400 hover:bg-navy-700 hover:text-white transition-colors relative;
+  }
+
+  .sidebar-link.active {
+    @apply bg-navy-700 text-accent-blue;
+  }
+
+  /* Buton stilleri */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-navy-900 focus:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply bg-accent-blue text-white hover:bg-blue-600 focus:ring-accent-blue;
+  }
+
+  .btn-secondary {
+    @apply bg-navy-700 text-gray-300 hover:bg-navy-600 hover:text-white focus:ring-gray-700;
+  }
+
+  .btn-success {
+    @apply bg-accent-green text-white hover:bg-green-600 focus:ring-accent-green;
+  }
+
+  .btn-danger {
+    @apply bg-accent-red text-white hover:bg-red-600 focus:ring-accent-red;
+  }
+
+  /* Input stilleri */
+  .input {
+    @apply bg-navy-700 text-gray-300 border border-navy-600 rounded-lg px-4 py-2 
+      focus:outline-none focus:ring-1 focus:ring-accent-blue focus:border-accent-blue;
+  }
+
+  /* Badge stilleri */
+  .badge {
+    @apply px-2 py-1 text-xs font-medium rounded-full;
+  }
+
+  .badge-blue {
+    @apply bg-accent-blue/20 text-accent-blue;
+  }
+
+  .badge-green {
+    @apply bg-accent-green/20 text-accent-green;
+  }
+
+  .badge-red {
+    @apply bg-accent-red/20 text-accent-red;
+  }
+
+  .badge-amber {
+    @apply bg-accent-amber/20 text-accent-amber;
+  }
+
+  .badge-purple {
+    @apply bg-accent-purple/20 text-accent-purple;
+  }
+
+  /* Animasyonlar */
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+/* Sayfa geçişleri için animasyonlar */
+.fade-enter {
+  opacity: 0;
+}
+.fade-enter-active {
+  opacity: 1;
+  transition: opacity 200ms;
+}
+.fade-exit {
+  opacity: 1;
+}
+.fade-exit-active {
+  opacity: 0;
+  transition: opacity 200ms;
+}
+
+/* Kaydırma çubuğu stilleri */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+} 

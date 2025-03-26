@@ -9,7 +9,7 @@ import {
   Fingerprint, ArrowBack, ArrowForward
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../services/apiConfig';
+import { apiInstance as api } from '../services/apiConfig';
 
 const SetupPage = () => {
   const [activeStep, setActiveStep] = useState(0);

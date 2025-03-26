@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Box, Container, Paper, Typography, TextField, Button, 
-  Alert, CircularProgress, Link, Grid
+  Alert, CircularProgress, Link, Grid, useTheme, alpha,
+  InputAdornment, Card, CardContent
 } from '@mui/material';
-import { Lock, Person } from '@mui/icons-material';
+import { Lock, Person, Analytics, VpnKey } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { api } from '../services/apiConfig';
+import { apiInstance as api } from '../services/apiConfig';
+import { saveAuthToken } from '../utils/authUtils';
 
 const LoginPage = ({ onLogin }) => {
+  const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [username, setUsername] = useState('');
@@ -57,12 +60,7 @@ const LoginPage = ({ onLogin }) => {
       if (response.data && response.data.token) {
         // JWT token'ı kaydet
         const token = response.data.token;
-        localStorage.setItem('token', token);
-        
-        // Kullanıcı bilgilerini kaydet (varsa)
-        if (response.data.user) {
-          localStorage.setItem('user', JSON.stringify(response.data.user));
-        }
+        saveAuthToken(token, response.data.user);
         
         console.log('Login başarılı:', response.data);
         
@@ -102,115 +100,185 @@ const LoginPage = ({ onLogin }) => {
   };
   
   return (
-    <Container maxWidth="sm" sx={{ display: 'flex', alignItems: 'center', minHeight: '100vh' }}>
-      <Paper 
-        sx={{ 
-          p: 4, 
+    <Box
+      sx={{
+        display: 'flex',
+        minHeight: '100vh',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundImage: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+        padding: 3
+      }}
+    >
+      <Card
+        elevation={8}
+        sx={{
           width: '100%',
-          maxWidth: 400,
-          mx: 'auto',
-          borderRadius: 2,
-          boxShadow: 3
+          maxWidth: 420,
+          borderRadius: 3,
+          overflow: 'hidden'
         }}
       >
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1" gutterBottom>
+        <Box
+          sx={{
+            bgcolor: theme.palette.primary.main,
+            p: 3,
+            textAlign: 'center'
+          }}
+        >
+          <Analytics sx={{ fontSize: 48, color: 'white', mb: 1 }} />
+          <Typography variant="h4" component="h1" fontWeight="bold" color="white">
             Knowhy Raporlama
           </Typography>
-          <Typography variant="subtitle1" color="text.secondary">
-            {isSetupMode 
-              ? 'Kurulum için giriş yapın' 
-              : 'Raporlama sistemine hoşgeldiniz'
-            }
-          </Typography>
         </Box>
         
-        {error && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {error}
-          </Alert>
-        )}
-        
-        {isSetupMode && (
-          <Alert severity="info" sx={{ mb: 3 }}>
-            <Typography variant="body2">
-              <strong>İlk kurulum için:</strong> Admin kullanıcı adı ve şifre olarak varsayılan bilgiler girilmiştir.
-            </Typography>
-          </Alert>
-        )}
-        
-        <Box component="form" onSubmit={handleSubmit}>
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            id="username"
-            label="Kullanıcı Adı"
-            name="username"
-            autoComplete="username"
-            autoFocus
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <Person sx={{ color: 'text.secondary', mr: 1 }} />
-              ),
-            }}
-          />
-          
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            name="password"
-            label="Şifre"
-            type="password"
-            id="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <Lock sx={{ color: 'text.secondary', mr: 1 }} />
-              ),
-            }}
-          />
-          
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2, py: 1.2 }}
-            disabled={loading}
-          >
-            {loading ? (
-              <CircularProgress size={24} />
-            ) : (
-              isSetupMode ? 'Kuruluma Başla' : 'Giriş Yap'
-            )}
-          </Button>
-          
-          {!isSetupMode && (
-            <Box sx={{ textAlign: 'center', mt: 2 }}>
-              <Typography variant="body2" color="text.secondary">
-                Hesabınız yok mu?{' '}
-                <Link 
-                  href="#" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    // Kayıt sayfasına yönlendirme yapılabilir veya modal açılabilir
-                    alert('Kayıt işlemi için sistem yöneticisiyle iletişime geçin.');
-                  }}
-                >
-                  Kayıt Ol
-                </Link>
-              </Typography>
-            </Box>
+        <CardContent sx={{ p: 4 }}>
+          {error && (
+            <Alert 
+              severity="error" 
+              sx={{ 
+                mb: 3, 
+                borderRadius: 2 
+              }}
+            >
+              {error}
+            </Alert>
           )}
-        </Box>
-      </Paper>
-    </Container>
+          
+          {isSetupMode && (
+            <Alert 
+              severity="info" 
+              sx={{ 
+                mb: 3, 
+                borderRadius: 2,
+                backgroundColor: alpha(theme.palette.info.light, 0.1),
+                color: theme.palette.info.dark
+              }}
+            >
+              <Typography variant="body2">
+                <strong>İlk kurulum için:</strong> Admin kullanıcı adı ve şifre olarak varsayılan bilgiler girilmiştir.
+              </Typography>
+            </Alert>
+          )}
+          
+          <Box component="form" onSubmit={handleSubmit}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              id="username"
+              label="Kullanıcı Adı"
+              name="username"
+              autoComplete="username"
+              autoFocus
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              variant="outlined"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Person color="primary" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                mb: 3,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  '&:hover fieldset': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                },
+              }}
+            />
+            
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              name="password"
+              label="Şifre"
+              type="password"
+              id="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              variant="outlined"
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Lock color="primary" />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                mb: 4,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  '&:hover fieldset': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: theme.palette.primary.main,
+                  },
+                },
+              }}
+            />
+            
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={loading}
+              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : <VpnKey />}
+              sx={{ 
+                py: 1.5, 
+                borderRadius: 2,
+                fontSize: '1rem',
+                textTransform: 'none',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                '&:hover': {
+                  boxShadow: '0 6px 16px rgba(0, 0, 0, 0.2)',
+                  transform: 'translateY(-1px)'
+                },
+                transition: 'all 0.2s ease-in-out',
+              }}
+            >
+              {isSetupMode ? 'Kuruluma Başla' : 'Giriş Yap'}
+            </Button>
+            
+            {!isSetupMode && (
+              <Box sx={{ textAlign: 'center', mt: 3 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Yardıma mı ihtiyacınız var?{' '}
+                  <Link 
+                    href="#" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      alert('Yardım için sistem yöneticinizle iletişime geçin.');
+                    }}
+                    sx={{
+                      color: theme.palette.primary.main,
+                      textDecoration: 'none',
+                      fontWeight: 'medium',
+                      '&:hover': {
+                        textDecoration: 'underline'
+                      }
+                    }}
+                  >
+                    Yönetici ile iletişime geçin
+                  </Link>
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 
-export default LoginPage; 
+export default LoginPage;
