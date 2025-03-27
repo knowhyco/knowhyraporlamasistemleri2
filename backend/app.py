@@ -71,8 +71,8 @@ except Exception as e:
 app = Flask(__name__)
 app.json_encoder = CustomJSONEncoder  # Özel JSON encoder'ı kullan
 
-# En basit CORS yapılandırması
-CORS(app, resources={r"/*": {"origins": "*"}})
+# CORS yapılandırması - sadece Frontend için
+CORS(app, resources={r"/*": {"origins": "http://3.90.113.180:3000"}})
 
 # socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -90,10 +90,11 @@ app.register_blueprint(report_bp, url_prefix='/api/reports')
 from controllers.user_controller import user_bp as auth_bp
 app.register_blueprint(auth_bp, url_prefix='/api/auth', name='auth')
 
-# OPTIONS istekleri için özel handler
+# OPTIONS istekleri için özel handler - after_request içinde CORS başlıklarını belirtme
 @app.after_request
 def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
+    # Access-Control-Allow-Origin header'ını burada eklemeyi kaldırıyoruz
+    # çünkü flask-cors zaten bunu ekliyor
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
     return response
