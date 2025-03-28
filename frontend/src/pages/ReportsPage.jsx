@@ -1,3 +1,4 @@
+import "../custom-force.css";
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
@@ -214,7 +215,10 @@ const ReportsPage = () => {
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const textColor = useColorModeValue('gray.600', 'gray.300');
   const accentColor = useColorModeValue('blue.500', 'blue.300');
-  const hoverBg = useColorModeValue('gray.50', 'gray.600');
+  const hoverBg = useColorModeValue('gray.50', 'gray.700');
+
+  // Son Aktiviteler kartında kullanılan hover background değerini burada tanımlayalım
+  const activityHoverBg = useColorModeValue('gray.50', 'gray.700');
 
   // Responsive değerler
   const isMobile = useBreakpointValue({ base: true, md: false }) ?? true;
@@ -222,86 +226,51 @@ const ReportsPage = () => {
   
   // Dashboard verilerini getir
   const fetchDashboardData = async () => {
-    console.log("Fetching dashboard data...");
     try {
-      // Sistem özet bilgilerini getir
+      console.log('Fetching dashboard data...');
+      
+      // Son 24 saatte toplam session, mesaj vs sayıları
       const summaryResponse = await api.get('/reports/summary');
       
-      // Saatlik aktivite verileri
-      const hourlyResponse = await api.get('/reports/run/14_Saatlik_Aktivite_Analizi');
+      // Rapor listesini al
+      const reportsResponse = await api.get('/reports/list');
       
-      // En çok konuşulan konular
-      const topicsResponse = await api.get('/reports/run/4_En_Sik_Sorulan_Sorular_Konular');
+      // Favori raporlar
+      const favoritesResponse = await api.get('/reports/favorites');
       
-      // Son aktiviteler
-      const recentResponse = await api.get('/reports/run/18_Son_24_saatteki_aktif_oturumlar');
-      
-      // Haftalık aktivite
-      const weeklyResponse = await api.get('/reports/run/7_Haftanin_Gunlerine_Gore_Aktivite_Dagilimi');
-      
-      // Tüm verileri birleştirip işle
-      const summary = summaryResponse.data?.results?.[0] || {};
-      
-      // Saatlik verileri düzenle (grafik için)
-      const hourlyData = hourlyResponse.data?.results || [];
-      const hourlyLabels = hourlyData.map(item => `${item.hour_of_day}:00`);
-      const hourlyValues = hourlyData.map(item => item.message_count);
-      
-      // Konuları düzenle (pie chart için)
-      const topicsData = topicsResponse.data?.results || [];
-      const topicsLabels = topicsData.map(item => item.question_category);
-      const topicsValues = topicsData.map(item => item.question_count);
-      
-      // Son aktiviteleri düzenle (tablo için)
-      const recentActivities = recentResponse.data?.results || [];
-      
-      // Haftalık aktivite verilerini düzenle
-      const weeklyData = weeklyResponse.data?.results || [];
-      const weeklyActivity = [0, 0, 0, 0, 0, 0, 0]; // Pazar'dan Cumartesi'ye
-      
-      weeklyData.forEach(item => {
-        const dayIndex = parseInt(item.day_of_week);
-        if (!isNaN(dayIndex) && dayIndex >= 0 && dayIndex < 7) {
-          weeklyActivity[dayIndex] = parseInt(item.session_count);
+      // Saatlik Aktivite raporu için çağrı
+      try {
+        // GET metodu ile rapor çalıştır
+        const hourlyActivityResponse = await api.get('/reports/run/14_Saatlik_Aktivite_Analizi');
+        
+        if (hourlyActivityResponse.data.status === 'success') {
+          setHourlyActivity(hourlyActivityResponse.data.results);
         }
-      });
+      } catch (error) {
+        console.error('Error fetching hourly activity data:', error);
+        // Hata durumunda sessizce devam et
+      }
       
-      // Dashboard verilerini güncelle
-      setDashboardData({
-        totalSessions: summary.total_sessions || 0,
-        totalMessages: summary.total_messages || 0,
-        activeSessions: summary.active_sessions || 0,
-        contextUsage: {
-          used: summary.context_used_count || 0,
-          notUsed: (summary.ai_messages || 0) - (summary.context_used_count || 0),
-          percentage: summary.context_usage_percentage || 0
-        },
-        messageTrend: 5.2, // Örnek değer, gerçek veri yoksa
-        sessionTrend: -2.8, // Örnek değer, gerçek veri yoksa
-        avgResponseTime: summary.avg_response_time || 0,
-        avgSessionDuration: summary.avg_session_duration || 0,
-        messagesByHour: {
-          labels: hourlyLabels,
-          values: hourlyValues
-        },
-        topTopics: {
-          labels: topicsLabels,
-          values: topicsValues
-        },
-        weeklyActivity: weeklyActivity,
-        recentActivities: recentActivities.slice(0, 5) // Son 5 aktivite
-      });
+      // UI state'i güncelle
+      setReports(reportsResponse.data.reports);
+      console.log('Reports fetched:', reportsResponse.data.reports);
+      
+      setFavorites(favoritesResponse.data.favorites);
+      console.log('Favorites fetched:', favoritesResponse.data.favorites);
+      
+      setSummaryData(summaryResponse.data);
+      console.log('Summary data fetched:', summaryResponse.data);
       
       setLoading(false);
     } catch (error) {
-      console.error("Error fetching data:", error);
-      setError(error);
+      console.error('Error fetching data:', error);
       setLoading(false);
       
+      // Toast notification ile kullanıcıya bilgi ver
       toast({
-        title: "Veri yükleme hatası",
-        description: "Dashboard verileri yüklenirken bir sorun oluştu.",
-        status: "error",
+        title: 'Veri yükleme hatası',
+        description: `${error.response?.data?.message || 'Veriler yüklenirken bir sorun oluştu'}`,
+        status: 'error',
         duration: 5000,
         isClosable: true,
       });
@@ -428,23 +397,32 @@ const ReportsPage = () => {
   // Favorilere ekle/çıkar
   const handleToggleFavorite = async (report) => {
     try {
-      const isFavorite = favorites.includes(report.report_name);
+      // Rapor adına göre favoriye ekle/çıkar
+      const response = await api.post(`/reports/favorite/${report.report_name}`);
       
-      // Favorilere ekle veya çıkar
-        if (isFavorite) {
-          setFavorites(favorites.filter(id => id !== report.report_name));
-        } else {
-          setFavorites([...favorites, report.report_name]);
-        }
+      // UI'ı güncelle
+      setReports(prevReports => 
+        prevReports.map(r => 
+          r.id === report.id ? { ...r, is_favorite: response.data.is_favorite } : r
+        )
+      );
       
-      // API isteği
-      await api.post(`/reports/${isFavorite ? 'unfavorite' : 'favorite'}/${report.report_name}`);
+      // Favori listesini güncelle
+      fetchFavorites();
       
-    } catch (err) {
-      console.error('Error toggling favorite:', err);
+      // Kullanıcıya bilgi ver
       toast({
-        title: 'Hata',
-        description: 'Favori işlemi sırasında bir hata oluştu.',
+        title: response.data.message,
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      
+      toast({
+        title: 'İşlem Hatası',
+        description: `Favori durumu değiştirilemedi: ${error.response?.data?.message || 'Bilinmeyen hata'}`,
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -496,25 +474,114 @@ const ReportsPage = () => {
     );
   };
 
-  // Ana dashboard grafikleri
-  const renderDashboardCharts = () => (
-    <Grid templateColumns="repeat(12, 1fr)" gap={6} mb={6}>
-      {/* Saatlik Aktivite Grafiği */}
-      <GridItem colSpan={{ base: 12, lg: 8 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          h="100%"
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardHeader pb={0}>
-            <Flex justifyContent="space-between" alignItems="center">
-              <Heading size="md" fontWeight="600">Saatlik Mesaj Aktivitesi</Heading>
+  // Ana dashboard gösterimi
+  const renderDashboard = () => (
+    <Box className="page-container">
+      {/* Dashboard Başlık */}
+      <Flex justifyContent="space-between" alignItems="center" mb={5}>
+        <Box>
+          <Heading as="h1" fontSize="2xl" fontWeight="700" mb={1}>
+            Knowhy Raporlama Sistemi
+          </Heading>
+          <Text color="gray.400" fontSize="sm">
+            Son güncelleme: {new Date().toLocaleString('tr-TR')}
+          </Text>
+        </Box>
+        <HStack spacing={3}>
+          <Menu>
+            <MenuButton
+              as={Button}
+              rightIcon={<ChevronDownIcon />}
+              variant="outline"
+              className="btn-outline"
+              size="sm"
+            >
+              {timeRange === '24h' && 'Son 24 Saat'}
+              {timeRange === '7d' && 'Son 7 Gün'}
+              {timeRange === '30d' && 'Son 30 Gün'}
+              {timeRange === 'custom' && 'Özel Aralık'}
+            </MenuButton>
+            <MenuList>
+              <MenuItem onClick={() => setTimeRange('24h')}>Son 24 Saat</MenuItem>
+              <MenuItem onClick={() => setTimeRange('7d')}>Son 7 Gün</MenuItem>
+              <MenuItem onClick={() => setTimeRange('30d')}>Son 30 Gün</MenuItem>
+              <MenuItem onClick={() => setTimeRange('custom')}>Özel Aralık</MenuItem>
+            </MenuList>
+          </Menu>
+          <Button
+            className="custom-button btn-primary"
+            size="sm"
+            leftIcon={<RepeatIcon />}
+            onClick={() => {
+              setLoading(true);
+              fetchDashboardData();
+            }}
+          >
+            Yenile
+          </Button>
+        </HStack>
+      </Flex>
+
+      {/* İstatistik Kartları */}
+      <Box className="dashboard-grid" mb={6}>
+        <Box className="stat-card">
+          <Box className="stat-icon-container">
+            <ChatIcon />
+          </Box>
+          <Box className="stat-value">{dashboardData.totalSessions.toLocaleString()}</Box>
+          <Box className="stat-label">Toplam Oturum</Box>
+          <Box className={`stat-trend ${dashboardData.sessionTrend > 0 ? 'trend-up' : 'trend-down'}`}>
+            {dashboardData.sessionTrend > 0 ? <ArrowUpIcon mr={1} /> : <ArrowDownIcon mr={1} />}
+            {Math.abs(dashboardData.sessionTrend)}% {dashboardData.sessionTrend > 0 ? 'artış' : 'azalış'}
+          </Box>
+        </Box>
+
+        <Box className="stat-card success">
+          <Box className="stat-icon-container">
+            <InfoIcon />
+          </Box>
+          <Box className="stat-value">{dashboardData.totalMessages.toLocaleString()}</Box>
+          <Box className="stat-label">Toplam Mesaj</Box>
+          <Box className={`stat-trend ${dashboardData.messageTrend > 0 ? 'trend-up' : 'trend-down'}`}>
+            {dashboardData.messageTrend > 0 ? <ArrowUpIcon mr={1} /> : <ArrowDownIcon mr={1} />}
+            {Math.abs(dashboardData.messageTrend)}% {dashboardData.messageTrend > 0 ? 'artış' : 'azalış'}
+          </Box>
+        </Box>
+
+        <Box className="stat-card warning">
+          <Box className="stat-icon-container">
+            <TimeIcon />
+          </Box>
+          <Box className="stat-value">{dashboardData.avgResponseTime.toFixed(2)}s</Box>
+          <Box className="stat-label">Ortalama Yanıt Süresi</Box>
+          <Box className="stat-trend trend-up">
+            <ArrowUpIcon mr={1} />
+            5.2% daha hızlı
+          </Box>
+        </Box>
+
+        <Box className="stat-card info">
+          <Box className="stat-icon-container">
+            <ViewIcon />
+          </Box>
+          <Box className="stat-value">{dashboardData.contextUsage.percentage}%</Box>
+          <Box className="stat-label">Context Kullanım Oranı</Box>
+          <Box className="progress-container" mt={2}>
+            <Box 
+              className="progress-bar" 
+              width={`${dashboardData.contextUsage.percentage}%`}
+            ></Box>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Üst Ana Grafikler */}
+      <Box className="dashboard-grid">
+        {/* Saatlik Aktivite Grafiği - 2 kolon genişliğinde */}
+        <Box className="dashboard-card dashboard-grid-col-2">
+          <Box className="card-header">
+            <Heading as="h3" fontSize="md">Saatlik Mesaj Aktivitesi</Heading>
+            <HStack>
               <Menu>
                 <MenuButton
                   as={IconButton}
@@ -524,19 +591,16 @@ const ReportsPage = () => {
                   aria-label="Grafik ayarları"
                 />
                 <MenuList>
-                  <MenuItem icon={<DownloadIcon />}>Dışa aktar</MenuItem>
+                  <MenuItem icon={<DownloadIcon />}>CSV olarak indir</MenuItem>
                   <MenuItem icon={<RepeatIcon />}>Yenile</MenuItem>
-                  <MenuDivider />
-                  <MenuItem icon={<CalendarIcon />}>Son 7 gün</MenuItem>
-                  <MenuItem icon={<CalendarIcon />}>Son 30 gün</MenuItem>
                 </MenuList>
               </Menu>
-            </Flex>
-          </CardHeader>
-          <CardBody pt={2}>
-            <Box h="300px">
+            </HStack>
+          </Box>
+          <Box className="card-body">
+            <Box className="chart-container" height="300px">
               {loading ? (
-                <Skeleton h="100%" />
+                <Skeleton height="100%" />
               ) : (
                 <Line
                   data={{
@@ -546,10 +610,10 @@ const ReportsPage = () => {
                         label: 'Mesaj Sayısı',
                         data: dashboardData.messagesByHour.values,
                         fill: true,
-                        backgroundColor: 'rgba(53, 162, 235, 0.2)',
-                        borderColor: 'rgba(53, 162, 235, 1)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderColor: '#3b82f6',
                         tension: 0.4,
-                        pointBackgroundColor: 'rgba(53, 162, 235, 1)',
+                        pointBackgroundColor: '#3b82f6',
                         pointRadius: 3,
                       },
                     ],
@@ -562,9 +626,9 @@ const ReportsPage = () => {
                         display: false,
                       },
                       tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        titleColor: 'rgba(255, 255, 255, 0.9)',
-                        bodyColor: 'rgba(255, 255, 255, 0.9)',
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: 'rgba(248, 250, 252, 0.95)',
+                        bodyColor: 'rgba(248, 250, 252, 0.95)',
                         cornerRadius: 8,
                         padding: 12,
                         displayColors: false,
@@ -574,13 +638,19 @@ const ReportsPage = () => {
                       y: {
                         beginAtZero: true,
                         grid: {
-                          color: 'rgba(0, 0, 0, 0.05)',
+                          color: 'rgba(203, 213, 225, 0.1)',
                         },
+                        ticks: {
+                          color: 'rgba(203, 213, 225, 0.8)',
+                        }
                       },
                       x: {
                         grid: {
                           display: false,
                         },
+                        ticks: {
+                          color: 'rgba(203, 213, 225, 0.8)',
+                        }
                       },
                     },
                     interaction: {
@@ -596,30 +666,18 @@ const ReportsPage = () => {
                 />
               )}
             </Box>
-          </CardBody>
-        </Card>
-      </GridItem>
+          </Box>
+        </Box>
 
-      {/* En Çok Konuşulan Konular */}
-      <GridItem colSpan={{ base: 12, md: 6, lg: 4 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          h="100%"
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardHeader pb={0}>
-            <Heading size="md" fontWeight="600">En Çok Konuşulan Konular</Heading>
-          </CardHeader>
-          <CardBody pt={2}>
-            <Box h="300px" display="flex" alignItems="center" justifyContent="center">
+        {/* En Çok Konuşulan Konular - 1 kolon genişliğinde */}
+        <Box className="glass-card">
+          <Box className="card-header">
+            <Heading as="h3" fontSize="md">En Çok Konuşulan Konular</Heading>
+          </Box>
+          <Box className="card-body">
+            <Box className="chart-container" height="220px">
               {loading ? (
-                <Skeleton h="100%" w="100%" />
+                <Skeleton height="100%" width="100%" />
               ) : (
                 <Doughnut
                   data={{
@@ -628,18 +686,18 @@ const ReportsPage = () => {
                       {
                         data: dashboardData.topTopics.values,
                         backgroundColor: [
-                          'rgba(255, 99, 132, 0.7)',
-                          'rgba(54, 162, 235, 0.7)',
-                          'rgba(255, 206, 86, 0.7)',
-                          'rgba(75, 192, 192, 0.7)',
-                          'rgba(153, 102, 255, 0.7)',
+                          'rgba(37, 99, 235, 0.8)',
+                          'rgba(16, 185, 129, 0.8)', 
+                          'rgba(239, 68, 68, 0.8)',
+                          'rgba(245, 158, 11, 0.8)',
+                          'rgba(99, 102, 241, 0.8)',
                         ],
                         borderColor: [
-                          'rgba(255, 99, 132, 1)',
-                          'rgba(54, 162, 235, 1)',
-                          'rgba(255, 206, 86, 1)',
-                          'rgba(75, 192, 192, 1)',
-                          'rgba(153, 102, 255, 1)',
+                          'rgba(37, 99, 235, 1)',
+                          'rgba(16, 185, 129, 1)',
+                          'rgba(239, 68, 68, 1)',
+                          'rgba(245, 158, 11, 1)',
+                          'rgba(99, 102, 241, 1)',
                         ],
                         borderWidth: 1,
                       },
@@ -655,45 +713,37 @@ const ReportsPage = () => {
                           padding: 20,
                           usePointStyle: true,
                           pointStyle: 'circle',
+                          color: 'rgba(203, 213, 225, 0.9)',
+                          font: {
+                            size: 11
+                          }
                         },
                       },
                       tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        titleColor: 'rgba(255, 255, 255, 0.9)',
-                        bodyColor: 'rgba(255, 255, 255, 0.9)',
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: 'rgba(248, 250, 252, 0.95)',
+                        bodyColor: 'rgba(248, 250, 252, 0.95)',
                         cornerRadius: 8,
                         padding: 12,
                       },
                     },
-                    cutout: '65%',
+                    cutout: '70%',
                   }}
                 />
               )}
             </Box>
-          </CardBody>
-        </Card>
-      </GridItem>
+          </Box>
+        </Box>
 
-      {/* Haftalık Aktivite Dağılımı */}
-      <GridItem colSpan={{ base: 12, md: 6, lg: 6 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          h="100%"
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardHeader pb={0}>
-            <Heading size="md" fontWeight="600">Haftalık Aktivite Dağılımı</Heading>
-          </CardHeader>
-          <CardBody pt={2}>
-            <Box h="300px">
+        {/* Haftalık Aktivite - 1 kolon genişliğinde */}
+        <Box className="dashboard-card">
+          <Box className="card-header">
+            <Heading as="h3" fontSize="md">Haftalık Aktivite Dağılımı</Heading>
+          </Box>
+          <Box className="card-body">
+            <Box className="chart-container" height="220px">
               {loading ? (
-                <Skeleton h="100%" />
+                <Skeleton height="100%" />
               ) : (
                 <Bar
                   data={{
@@ -702,10 +752,10 @@ const ReportsPage = () => {
                       {
                         label: 'Oturum Sayısı',
                         data: dashboardData.weeklyActivity,
-                        backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(14, 165, 233, 0.7)',
+                        borderColor: 'rgba(14, 165, 233, 1)',
                         borderWidth: 1,
-                        borderRadius: 8,
+                        borderRadius: 6,
                       },
                     ],
                   }}
@@ -717,9 +767,9 @@ const ReportsPage = () => {
                         display: false,
                       },
                       tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        titleColor: 'rgba(255, 255, 255, 0.9)',
-                        bodyColor: 'rgba(255, 255, 255, 0.9)',
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: 'rgba(248, 250, 252, 0.95)',
+                        bodyColor: 'rgba(248, 250, 252, 0.95)',
                         cornerRadius: 8,
                         padding: 12,
                         displayColors: false,
@@ -729,212 +779,118 @@ const ReportsPage = () => {
                       y: {
                         beginAtZero: true,
                         grid: {
-                          color: 'rgba(0, 0, 0, 0.05)',
+                          color: 'rgba(203, 213, 225, 0.1)',
                         },
+                        ticks: {
+                          color: 'rgba(203, 213, 225, 0.8)',
+                        }
                       },
                       x: {
                         grid: {
                           display: false,
                         },
+                        ticks: {
+                          color: 'rgba(203, 213, 225, 0.8)',
+                        }
                       },
                     },
                   }}
                 />
               )}
             </Box>
-          </CardBody>
-        </Card>
-      </GridItem>
+          </Box>
+        </Box>
 
-      {/* Son Aktiviteler */}
-      <GridItem colSpan={{ base: 12, lg: 6 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          h="100%"
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardHeader pb={0}>
-            <Flex justifyContent="space-between" alignItems="center">
-              <Heading size="md" fontWeight="600">Son Aktiviteler</Heading>
-              <Button size="sm" variant="ghost" rightIcon={<ChevronRightIcon />}>
-                Tümünü Gör
-              </Button>
-            </Flex>
-          </CardHeader>
-          <CardBody pt={4}>
-            <VStack align="stretch" spacing={4}>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} height="60px" />
-                ))
-              ) : (
-                dashboardData.recentActivities.map((activity, idx) => (
-                  <Flex
-                    key={idx}
-                    p={3}
-                    borderWidth="1px"
-                    borderRadius="lg"
-                    alignItems="center"
-                    transition="all 0.2s"
-                    _hover={{ bg: useColorModeValue('gray.50', 'gray.700'), transform: 'translateY(-2px)' }}
-                  >
-                    <Box
-                      p={2}
-                      bg={idx % 2 === 0 ? 'green.50' : 'blue.50'}
-                      color={idx % 2 === 0 ? 'green.500' : 'blue.500'}
-                      borderRadius="full"
-                      mr={3}
-                    >
-                      <Icon as={idx % 2 === 0 ? CheckIcon : InfoIcon} w={5} h={5} />
+        {/* Son Aktiviteler - 1 kolon genişliğinde */}
+        <Box className="dashboard-card dashboard-grid-row-2">
+          <Box className="card-header">
+            <Heading as="h3" fontSize="md">Son Aktiviteler</Heading>
+            <HStack>
+              <Badge className="badge-primary">Canlı</Badge>
+            </HStack>
+          </Box>
+          <Box className="card-body" overflowY="auto" maxHeight="480px">
+            {loading ? (
+              Array(5).fill(0).map((_, index) => (
+                <Skeleton height="80px" mb={3} key={index} />
+              ))
+            ) : (
+              dashboardData.recentActivities.map((activity, index) => (
+                <Box key={index} className="activity-item">
+                  <Box className="activity-icon">
+                    <ChatIcon />
+                  </Box>
+                  <Box className="activity-content">
+                    <Box className="activity-title">{activity.session_id}</Box>
+                    <Box className="activity-subtitle">
+                      {activity.message_count} mesaj • {activity.session_duration}
                     </Box>
-                    <Box flex="1">
-                      <Text fontWeight="semibold" fontSize="sm">
-                        {activity.activity}
-                      </Text>
-                      <Text fontSize="xs" color="gray.500">
-                        {activity.date}
-                      </Text>
-                    </Box>
-                    <Badge
-                      colorScheme={idx % 2 === 0 ? 'green' : 'blue'}
-                      borderRadius="full"
-                      px={2}
-                    >
-                      {idx % 2 === 0 ? 'Oturum' : 'Rapor'}
-                    </Badge>
-                  </Flex>
-                ))
-              )}
-            </VStack>
-          </CardBody>
-        </Card>
-      </GridItem>
-    </Grid>
-  );
+                  </Box>
+                  <Box className="activity-time">
+                    {new Date(activity.last_message).toLocaleTimeString('tr-TR')}
+                  </Box>
+                </Box>
+              ))
+            )}
+          </Box>
+        </Box>
 
-  // Dashboard sayfası render ediliyor (index/dashboard sayfası)
-  const renderDashboard = () => (
-    <Box>
-      {/* Header filtreleme bölümü */}
-      <Card mb={6} borderRadius="xl" boxShadow="sm">
-        <CardBody>
-          <Grid templateColumns="repeat(12, 1fr)" gap={4}>
-            <GridItem colSpan={{ base: 12, md: 4 }}>
-              <InputGroup>
-                <InputLeftElement pointerEvents="none">
-                  <SearchIcon color="gray.400" />
-                </InputLeftElement>
-                <Input 
-                  type="text" 
-                  placeholder="Ara..."
-                  borderRadius="lg"
-                  onChange={(e) => setSearchTerm(e.target.value)} 
-                />
-              </InputGroup>
-            </GridItem>
-            
-            <GridItem colSpan={{ base: 6, md: 2 }}>
-              <Menu closeOnSelect={false}>
-                <MenuButton
-                  as={Button}
-                  rightIcon={<ChevronDownIcon />}
-                  width="100%"
-                  borderRadius="lg"
-                  variant="outline"
+        {/* SQL Raporları - 2 kolon genişliğinde */}
+        <Box className="dashboard-card dashboard-grid-col-2">
+          <Box className="card-header">
+            <Heading as="h3" fontSize="md">SQL Raporları</Heading>
+            <Button 
+              size="sm" 
+              className="custom-button btn-primary"
+              onClick={() => setSelectedTab(1)}
+            >
+              Tüm Raporlar
+            </Button>
+          </Box>
+          <Box className="card-body">
+            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
+              {reports.slice(0, 6).map((report) => (
+                <Box 
+                  key={report.id} 
+                  className="report-card"
+                  onClick={() => handleReportClick(report)}
+                  cursor="pointer"
                 >
-                  Tarih
-                </MenuButton>
-                <MenuList>
-                  <MenuItem onClick={() => setTimeRange('24h')}>Son 24 Saat</MenuItem>
-                  <MenuItem onClick={() => setTimeRange('7d')}>Son 7 Gün</MenuItem>
-                  <MenuItem onClick={() => setTimeRange('30d')}>Son 30 Gün</MenuItem>
-                  <MenuItem onClick={() => setTimeRange('custom')}>Özel Aralık</MenuItem>
-                </MenuList>
-              </Menu>
-            </GridItem>
-            
-            <GridItem colSpan={{ base: 6, md: 2 }}>
-              <Menu closeOnSelect={false}>
-                <MenuButton
-                  as={Button}
-                  rightIcon={<ChevronDownIcon />}
-                  width="100%"
-                  borderRadius="lg"
-                  variant="outline"
-                >
-                  Kategori
-                </MenuButton>
-                <MenuList>
-                  <MenuItem>Tüm Kategoriler</MenuItem>
-                  <MenuItem>Zaman Bazlı Analizler</MenuItem>
-                  <MenuItem>İçerik Analizleri</MenuItem>
-                  <MenuItem>Performans Metrikleri</MenuItem>
-                  <MenuItem>Detaylı Görünümler</MenuItem>
-                </MenuList>
-              </Menu>
-            </GridItem>
-            
-            <GridItem colSpan={{ base: 6, md: 2 }}>
-              <Menu>
-                <MenuButton
-                  as={Button}
-                  rightIcon={<SettingsIcon />}
-                  width="100%"
-                  borderRadius="lg"
-                  variant="outline"
-                >
-                  Görünüm
-                </MenuButton>
-                <MenuList>
-                  <MenuItem icon={<RepeatIcon />} onClick={() => fetchDashboardData()}>
-                    Yenile
-                  </MenuItem>
-                  <MenuItem
-                    icon={autoRefresh ? <ViewOffIcon /> : <ViewIcon />}
-                    onClick={() => setAutoRefresh(!autoRefresh)}
-                  >
-                    {autoRefresh ? 'Otomatik Yenilemeyi Kapat' : 'Otomatik Yenileme'}
-                  </MenuItem>
-                  <MenuDivider />
-                  <MenuItem icon={<DownloadIcon />}>
-                    PDF Olarak İndir
-                  </MenuItem>
-                </MenuList>
-              </Menu>
-            </GridItem>
-            
-            <GridItem colSpan={{ base: 6, md: 2 }}>
-              <Button 
-                leftIcon={<RepeatIcon />}
-                width="100%"
-                borderRadius="lg"
-                colorScheme="blue"
-                onClick={() => fetchDashboardData()}
-              >
-                Yenile
-              </Button>
-            </GridItem>
-          </Grid>
-        </CardBody>
-      </Card>
-      
-      {/* Ana içerik alanı */}
-      {renderDashboardSummary()}
-      {renderDashboardCharts()}
+                  <Box className="report-card-header">
+                    <Text fontWeight="600" fontSize="sm" noOfLines={1}>{report.name}</Text>
+                    <IconButton
+                      aria-label="Favori"
+                      icon={favorites.includes(report.id) ? <StarIcon color="yellow.400" /> : <StarOutlineIcon />}
+                      size="sm"
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(report);
+                      }}
+                    />
+                  </Box>
+                  <Box className="report-card-body">
+                    <Text fontSize="xs" color="gray.400" noOfLines={2}>
+                      {report.description || "Bu rapor için açıklama bulunmamaktadır."}
+                    </Text>
+                  </Box>
+                  <Box className="report-card-footer">
+                    <Badge className="badge-primary">{report.category}</Badge>
+                  </Box>
+                </Box>
+              ))}
+            </SimpleGrid>
+          </Box>
+        </Box>
+      </Box>
     </Box>
   );
-  
+
   // Rapor listesi render ediliyor
   const renderReportList = () => (
     <Box>
       {/* Filtre ve arama bar */}
-      <Card mb={6} borderRadius="xl" boxShadow="sm">
+      <Card className="stat-card" mb={6} borderRadius="xl">
         <CardBody>
           <Grid templateColumns="repeat(12, 1fr)" gap={4}>
             <GridItem colSpan={{ base: 12, md: 5 }}>
@@ -959,6 +915,7 @@ const ReportsPage = () => {
                   width="100%"
                   borderRadius="lg"
                   variant="outline"
+                  className="modern-button"
                 >
                   Kategori
                 </MenuButton>
@@ -980,6 +937,7 @@ const ReportsPage = () => {
                   width="100%"
                   borderRadius="lg" 
                   variant="outline"
+                  className="modern-button"
                 >
                   Sırala
                 </MenuButton>
@@ -1000,6 +958,7 @@ const ReportsPage = () => {
                   colorScheme={viewMode === 'grid' ? 'blue' : 'gray'}
                   onClick={() => setViewMode('grid')}
                   aria-label="Grid view"
+                  className="modern-button"
                 >
                   <Icon as={HamburgerIcon} />
                 </Button>
@@ -1009,6 +968,7 @@ const ReportsPage = () => {
                   colorScheme={viewMode === 'list' ? 'blue' : 'gray'}
                   onClick={() => setViewMode('list')}
                   aria-label="List view"
+                  className="modern-button"
                 >
                   <Icon as={ViewIcon} />
                 </Button>
@@ -1021,20 +981,15 @@ const ReportsPage = () => {
       {/* Rapor kartları grid */}
       <SimpleGrid columns={{base: 1, md: 2, lg: viewMode === 'grid' ? 3 : 1}} spacing={5}>
       {filteredReports.map(report => (
-        <Card 
+        <Card className="stat-card" 
           key={report.report_name}
           cursor="pointer"
-          _hover={{ 
-            transform: 'translateY(-5px)', 
-            boxShadow: 'xl',
-            borderColor: accentColor
-          }}
           transition="all 0.3s"
           borderWidth="1px"
-            borderRadius="xl"
+          borderRadius="xl"
           onClick={() => handleReportClick(report)}
         >
-          <CardHeader pb={0}>
+          <CardHeader className="card-header" pb={0}>
             <Flex>
               <Heading size="md" isTruncated>{report.display_name}</Heading>
               <Spacer />
@@ -1047,18 +1002,19 @@ const ReportsPage = () => {
                   handleToggleFavorite(report);
                 }}
                 color={favorites.includes(report.report_name) ? "yellow.500" : "gray.400"}
+                className="modern-button"
               />
             </Flex>
           </CardHeader>
           <CardBody>
             <Text noOfLines={2} mb={4}>{report.description}</Text>
             <HStack spacing={2}>
-                <Badge colorScheme="blue" borderRadius="full">Güncel</Badge>
+                <Badge colorScheme="blue" borderRadius="full" className="custom-badge">Güncel</Badge>
               {report.parameters && Object.keys(report.parameters).length > 0 && (
-                  <Badge colorScheme="purple" borderRadius="full">Parametreli</Badge>
+                  <Badge colorScheme="purple" borderRadius="full" className="custom-badge">Parametreli</Badge>
               )}
               {report.is_registered && (
-                  <Badge colorScheme="green" borderRadius="full">Kayıtlı</Badge>
+                  <Badge colorScheme="green" borderRadius="full" className="custom-badge">Kayıtlı</Badge>
               )}
             </HStack>
           </CardBody>
@@ -1068,214 +1024,13 @@ const ReportsPage = () => {
     </Box>
   );
 
-  const renderDashboardSummary = () => (
-    <Grid templateColumns="repeat(12, 1fr)" gap={6} mb={6}>
-      {/* Toplam Oturum Sayısı */}
-      <GridItem colSpan={{ base: 6, md: 3 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardBody>
-            <Flex align="center">
-              <Box 
-                p={3} 
-                borderRadius="full" 
-                bg="blue.50" 
-                color="blue.500" 
-                mr={4}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Icon as={ChatIcon} boxSize={6} />
-              </Box>
-              <Box>
-                <Text fontWeight="medium" fontSize="sm" color="gray.500">Toplam Oturum</Text>
-                {loading ? (
-                  <Skeleton height="30px" width="90px" mt={1} />
-                ) : (
-                  <Flex align="center">
-                    <Text fontWeight="bold" fontSize="2xl">{dashboardData.totalSessions.toLocaleString()}</Text>
-                    <Flex align="center" ml={2} color={dashboardData.sessionTrend > 0 ? "green.500" : "red.500"}>
-                      <Icon 
-                        as={dashboardData.sessionTrend > 0 ? ArrowUpIcon : ArrowDownIcon} 
-                        boxSize={3} 
-                        mr={1} 
-                      />
-                      <Text fontSize="sm" fontWeight="medium">
-                        {Math.abs(dashboardData.sessionTrend)}%
-                      </Text>
-                    </Flex>
-                  </Flex>
-                )}
-                <Text fontSize="xs" color="gray.500" mt={1}>son haftada</Text>
-              </Box>
-            </Flex>
-          </CardBody>
-        </Card>
-      </GridItem>
-
-      {/* Toplam Mesaj Sayısı */}
-      <GridItem colSpan={{ base: 6, md: 3 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardBody>
-            <Flex align="center">
-              <Box 
-                p={3} 
-                borderRadius="full" 
-                bg="purple.50" 
-                color="purple.500" 
-                mr={4}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Icon as={InfoIcon} boxSize={6} />
-              </Box>
-              <Box>
-                <Text fontWeight="medium" fontSize="sm" color="gray.500">Toplam Mesaj</Text>
-                {loading ? (
-                  <Skeleton height="30px" width="90px" mt={1} />
-                ) : (
-                  <Flex align="center">
-                    <Text fontWeight="bold" fontSize="2xl">{dashboardData.totalMessages.toLocaleString()}</Text>
-                    <Flex align="center" ml={2} color={dashboardData.messageTrend > 0 ? "green.500" : "red.500"}>
-                      <Icon 
-                        as={dashboardData.messageTrend > 0 ? ArrowUpIcon : ArrowDownIcon} 
-                        boxSize={3} 
-                        mr={1} 
-                      />
-                      <Text fontSize="sm" fontWeight="medium">
-                        {Math.abs(dashboardData.messageTrend)}%
-                      </Text>
-                    </Flex>
-                  </Flex>
-                )}
-                <Text fontSize="xs" color="gray.500" mt={1}>son haftada</Text>
-              </Box>
-            </Flex>
-          </CardBody>
-        </Card>
-      </GridItem>
-
-      {/* Aktif Oturumlar */}
-      <GridItem colSpan={{ base: 6, md: 3 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardBody>
-            <Flex align="center">
-              <Box 
-                p={3} 
-                borderRadius="full" 
-                bg="green.50" 
-                color="green.500" 
-                mr={4}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Icon as={TimeIcon} boxSize={6} />
-              </Box>
-              <Box>
-                <Text fontWeight="medium" fontSize="sm" color="gray.500">Aktif Oturumlar</Text>
-                {loading ? (
-                  <Skeleton height="30px" width="90px" mt={1} />
-                ) : (
-                  <Text fontWeight="bold" fontSize="2xl">{dashboardData.activeSessions}</Text>
-                )}
-                <Text fontSize="xs" color="gray.500" mt={1}>Son 24 saatte</Text>
-              </Box>
-            </Flex>
-          </CardBody>
-        </Card>
-      </GridItem>
-
-      {/* Context Kullanımı */}
-      <GridItem colSpan={{ base: 6, md: 3 }}>
-        <Card 
-          bg={cardBg} 
-          borderRadius="xl" 
-          boxShadow="md" 
-          borderWidth="1px" 
-          borderColor={borderColor}
-          transition="all 0.2s"
-          _hover={{ boxShadow: "lg", transform: "translateY(-2px)" }}
-          overflow="hidden"
-        >
-          <CardBody>
-            <Flex align="center">
-              <Box 
-                p={3} 
-                borderRadius="full" 
-                bg="teal.50" 
-                color="teal.500" 
-                mr={4}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-              >
-                <Icon as={ViewIcon} boxSize={6} />
-              </Box>
-              <Box width="100%">
-                <Text fontWeight="medium" fontSize="sm" color="gray.500">Context Kullanımı</Text>
-                {loading ? (
-                  <Skeleton height="30px" width="90px" mt={1} />
-                ) : (
-                  <Flex align="center">
-                    <Text fontWeight="bold" fontSize="2xl">{dashboardData.contextUsage.percentage}%</Text>
-                    <Flex align="center" ml={2} color="green.500">
-                      <Icon as={ArrowUpIcon} boxSize={3} mr={1} />
-                      <Text fontSize="sm" fontWeight="medium">12%</Text>
-                    </Flex>
-                  </Flex>
-                )}
-                <Progress 
-                  value={dashboardData.contextUsage.percentage} 
-                  size="xs" 
-                  colorScheme="teal" 
-                  borderRadius="full" 
-                  mt={2}
-                />
-                <Text fontSize="xs" color="gray.500" mt={1}>önceki aya göre</Text>
-              </Box>
-            </Flex>
-          </CardBody>
-        </Card>
-      </GridItem>
-    </Grid>
-  );
-
   // Ana render
     return (
     <Box p={4}>
-      <Flex mb={6} alignItems="center">
+      <Flex mb={6} alignItems="center" className="navbar">
         <Heading size="lg">Knowhy Raporlama</Heading>
-            <Spacer />
-        <HStack spacing={2}>
+        <Spacer />
+        <HStack spacing={4}>
           <Button
             leftIcon={<RepeatIcon />}
             colorScheme="blue"
@@ -1283,6 +1038,7 @@ const ReportsPage = () => {
             size="sm"
             onClick={() => fetchDashboardData()}
             isLoading={loading}
+            className="modern-button"
           >
             Son 24 Saat
           </Button>
@@ -1290,6 +1046,7 @@ const ReportsPage = () => {
             aria-label="Ayarlar"
             icon={<SettingsIcon />}
             variant="ghost"
+            className="modern-button"
           />
           <Avatar
             size="sm"
@@ -1306,11 +1063,12 @@ const ReportsPage = () => {
         index={selectedTab}
         onChange={setSelectedTab}
         mb={6}
+        className="tabs-container"
       >
         <TabList>
-          <Tab>Dashboard</Tab>
-          <Tab>Raporlar</Tab>
-          <Tab>Favoriler</Tab>
+          <Tab className="tab-button">Dashboard</Tab>
+          <Tab className="tab-button">Raporlar</Tab>
+          <Tab className="tab-button">Favoriler</Tab>
         </TabList>
         
         <TabPanels mt={4}>
@@ -1349,7 +1107,7 @@ const ReportsPage = () => {
                       borderRadius="xl"
                       onClick={() => handleReportClick(report)}
                     >
-                      <CardHeader pb={0}>
+                      <CardHeader className="card-header" pb={0}>
                         <Flex>
                           <Heading size="md" isTruncated>{report.display_name}</Heading>
                           <Spacer />

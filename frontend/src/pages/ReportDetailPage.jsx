@@ -69,13 +69,29 @@ const ReportDetailPage = () => {
       setLoading(true);
       setError(null);
       
+      // API URL'yi doğru şekilde ayarlayalım
+      const apiUrl = process.env.REACT_APP_API_URL || window.location.origin + '/api';
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/reports/${reportId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       
-      if (response.data.status === 'success') {
-        const reportData = response.data.report;
+      console.log(`Rapor detayları getiriliyor: ${apiUrl}/reports/${reportId}`);
+      
+      // Fetch API ile istek yap - credentials ayarını tamamen kaldıralım
+      const requestOptions = {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      };
+      
+      const response = await fetch(`${apiUrl}/reports/${reportId}`, requestOptions);
+      
+      const responseData = await response.json();
+      
+      console.log('Rapor detayları:', responseData);
+      
+      if (responseData.status === 'success') {
+        const reportData = responseData.report;
         setReport(reportData);
         
         // Form değerlerini parametrelere göre başlat
@@ -108,7 +124,7 @@ const ReportDetailPage = () => {
         }
         
       } else {
-        setError(response.data.message || 'Rapor detayları alınamadı');
+        setError(responseData.message || 'Rapor detayları alınamadı');
       }
     } catch (err) {
       console.error('Rapor detayları getirme hatası:', err);
@@ -121,13 +137,23 @@ const ReportDetailPage = () => {
   // Favori raporları getir
   const fetchFavorites = async () => {
     try {
+      const apiUrl = process.env.REACT_APP_API_URL || window.location.origin + '/api';
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/reports/favorites`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
       
-      if (response.data.status === 'success') {
-        setFavorites(response.data.favorites || []);
+      const requestOptions = {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      };
+      
+      const response = await fetch(`${apiUrl}/reports/favorites`, requestOptions);
+      
+      const responseData = await response.json();
+      
+      if (responseData.status === 'success') {
+        setFavorites(responseData.favorites || []);
       }
     } catch (err) {
       console.error('Favori raporlar getirilirken hata:', err);
@@ -162,32 +188,40 @@ const ReportDetailPage = () => {
         }
       }
       
+      // API URL'yi alın - Burada URL'yi doğru şekilde ayarlayalım
+      const apiUrl = process.env.REACT_APP_API_URL || window.location.origin + '/api';
       const token = localStorage.getItem('token');
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/reports/${reportId}/run`,
-        { params: formValues },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
       
-      if (response.data.status === 'success') {
-        setReportData(response.data.data || []);
+      console.log(`Rapor çalıştırılıyor: ${apiUrl}/reports/${reportId}/run`);
+      
+      const requestOptions = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ params: formValues })
+      };
+      
+      // Yeni API endpoint'ini kullan - /<report_name>/run
+      const response = await fetch(`${apiUrl}/reports/${reportId}/run`, requestOptions);
+      
+      const data = await response.json();
+      
+      if (data.status === 'success') {
+        setReportData(data.data || []);
         setSuccess('Rapor başarıyla çalıştırıldı');
         
         // Sonuç boş ise kullanıcıya bildir
-        if (response.data.data.length === 0) {
+        if (data.data.length === 0) {
           setSuccess('Rapor çalıştırıldı, ancak sonuç bulunamadı');
         }
       } else {
-        setError(response.data.message || 'Rapor çalıştırılırken bir hata oluştu');
+        setError(data.message || 'Rapor çalıştırılırken bir hata oluştu');
       }
     } catch (err) {
       console.error('Rapor çalıştırma hatası:', err);
-      
-      if (err.response && err.response.data) {
-        setError(err.response.data.message || 'Rapor çalıştırılırken bir hata oluştu');
-      } else {
-        setError('Sunucuya bağlanırken bir hata oluştu');
-      }
+      setError('Sunucuya bağlanırken bir hata oluştu');
     } finally {
       setRunning(false);
     }
@@ -198,16 +232,26 @@ const ReportDetailPage = () => {
     if (!report) return;
     
     try {
+      const apiUrl = process.env.REACT_APP_API_URL || window.location.origin + '/api';
       const token = localStorage.getItem('token');
       const isFavorite = favorites.includes(reportId);
       
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL}/reports/${isFavorite ? 'unfavorite' : 'favorite'}/${reportId}`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const endpoint = isFavorite ? 'unfavorite' : 'favorite';
+      console.log(`Favori durumu değiştiriliyor: ${apiUrl}/reports/${endpoint}/${reportId}`);
       
-      if (response.data.status === 'success') {
+      const requestOptions = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      };
+      
+      const response = await fetch(`${apiUrl}/reports/${endpoint}/${reportId}`, requestOptions);
+      
+      const responseData = await response.json();
+      
+      if (responseData.status === 'success') {
         // Favori listesini güncelle
         if (isFavorite) {
           setFavorites(favorites.filter(id => id !== reportId));

@@ -1,153 +1,177 @@
 import React, { useState } from 'react';
 import { 
-  AppBar, Toolbar, Typography, Button, IconButton, 
-  Menu, MenuItem, Avatar, Divider, Box, Tooltip
-} from '@mui/material';
+  Box, Flex, HStack, IconButton, Text, Avatar, 
+  Menu, MenuButton, MenuList, MenuItem, MenuDivider,
+  useColorModeValue, Tooltip, Button, Badge
+} from '@chakra-ui/react';
 import { 
-  ExitToApp, AccountCircle, Dashboard, Assessment, 
-  AdminPanelSettings, Menu as MenuIcon
-} from '@mui/icons-material';
+  ChevronDownIcon, HamburgerIcon, SettingsIcon,
+  InfoIcon, ChatIcon, BellIcon, SearchIcon
+} from '@chakra-ui/icons';
 import { useNavigate, Link } from 'react-router-dom';
 
-const Navbar = ({ user, onLogout }) => {
-  const [anchorEl, setAnchorEl] = useState(null);
+const Navbar = ({ user, onToggleSidebar, isSidebarOpen, onLogout }) => {
   const navigate = useNavigate();
   const isAdmin = user && user.role === 'admin';
 
-  const handleMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
   const handleLogout = () => {
-    handleClose();
     onLogout();
     navigate('/login');
   };
 
   const handleGoToAdmin = () => {
-    handleClose();
     navigate('/admin');
   };
 
   const handleGoToDashboard = () => {
-    handleClose();
     navigate('/');
   };
 
   return (
-    <AppBar position="static">
-      <Toolbar>
-        <IconButton
-          edge="start"
-          color="inherit"
-          sx={{ mr: 2 }}
-        >
-          <MenuIcon />
-        </IconButton>
-        
-        <Typography variant="h6" component={Link} to="/" sx={{ flexGrow: 1, textDecoration: 'none', color: 'white' }}>
-          Knowhy Raporlama
-        </Typography>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {/* Hızlı erişim butonları */}
-          <Tooltip title="Raporlar">
-            <IconButton 
-              color="inherit" 
-              onClick={handleGoToDashboard}
+    <Box className="app-navbar">
+      <Flex alignItems="center" justifyContent="space-between" width="100%">
+        {/* Sol Taraf - Logo ve Menü Toggle */}
+        <HStack spacing={3}>
+          <IconButton
+            aria-label="Open sidebar"
+            variant="ghost"
+            icon={<HamburgerIcon />}
+            onClick={onToggleSidebar}
+            size="md"
+            color="gray.400"
+            _hover={{ color: 'white', bg: 'whiteAlpha.100' }}
+          />
+          
+          <Link to="/">
+            <Text 
+              fontWeight="bold" 
+              fontSize="lg" 
+              letterSpacing="tight"
+              bgGradient="linear(to-r, blue.400, teal.400)"
+              bgClip="text"
             >
-              <Assessment />
-            </IconButton>
+              Knowhy Raporlama
+            </Text>
+          </Link>
+        </HStack>
+
+        {/* Orta Kısım - Arama */}
+        <Box 
+          display={{ base: 'none', md: 'flex' }} 
+          width="40%" 
+          maxW="500px"
+          className="input-group"
+        >
+          <SearchIcon className="input-icon" />
+          <input
+            type="text"
+            placeholder="Raporlarda ara..."
+            className="custom-input input-with-icon"
+          />
+        </Box>
+        
+        {/* Sağ Taraf - İşlevsel Butonlar ve Kullanıcı Menüsü */}
+        <HStack spacing={3}>
+          {/* Bildirim */}
+          <Tooltip hasArrow label="Bildirimler" placement="bottom">
+            <IconButton
+              aria-label="Notifications"
+              variant="ghost"
+              icon={
+                <Box position="relative">
+                  <BellIcon fontSize="xl" color="gray.400" />
+                  <Badge 
+                    position="absolute" 
+                    top="-6px" 
+                    right="-6px" 
+                    className="badge-primary"
+                    borderRadius="full"
+                    minW="18px"
+                    minH="18px"
+                    p="2px"
+                    fontSize="xs"
+                    display="flex"
+                    alignItems="center"
+                    justifyContent="center"
+                  >
+                    3
+                  </Badge>
+                </Box>
+              }
+              _hover={{ color: 'white', bg: 'whiteAlpha.100' }}
+            />
           </Tooltip>
           
-          {isAdmin && (
-            <Tooltip title="Admin Paneli">
-              <IconButton 
-                color="inherit" 
-                onClick={handleGoToAdmin}
-              >
-                <AdminPanelSettings />
-              </IconButton>
-            </Tooltip>
-          )}
-          
-          {/* Kullanıcı menüsü */}
-          <Box sx={{ ml: 2 }}>
-            <Tooltip title="Kullanıcı Menüsü">
-              <IconButton
-                onClick={handleMenu}
-                color="inherit"
-              >
-                <Avatar 
-                  sx={{ 
-                    width: 32, 
-                    height: 32, 
-                    bgcolor: isAdmin ? 'secondary.main' : 'primary.dark',
-                    fontSize: '1rem' 
-                  }}
-                >
-                  {user.username ? user.username[0].toUpperCase() : 'U'}
-                </Avatar>
-              </IconButton>
-            </Tooltip>
-            
-            <Menu
-              anchorEl={anchorEl}
-              open={Boolean(anchorEl)}
-              onClose={handleClose}
-              PaperProps={{
-                elevation: 3,
-                sx: {
-                  mt: 1.5,
-                  minWidth: 180,
-                }
-              }}
+          {/* Yardım */}
+          <Tooltip hasArrow label="Yardım" placement="bottom">
+            <IconButton
+              aria-label="Help"
+              variant="ghost"
+              icon={<InfoIcon fontSize="md" color="gray.400" />}
+              _hover={{ color: 'white', bg: 'whiteAlpha.100' }}
+            />
+          </Tooltip>
+
+          {/* Kullanıcı Menüsü */}
+          <Menu>
+            <MenuButton
+              as={Button}
+              variant="ghost"
+              rightIcon={<ChevronDownIcon />}
+              _hover={{ bg: 'whiteAlpha.100' }}
+              px={2}
             >
-              <MenuItem disabled>
-                <Typography variant="subtitle2" component="div">
-                  {user.username}
-                  {isAdmin && (
-                    <Box component="span" sx={{ 
-                      bgcolor: 'secondary.main', 
-                      color: 'white', 
-                      fontSize: '0.7rem', 
-                      px: 1, 
-                      borderRadius: 1,
-                      ml: 1
-                    }}>
-                      Admin
-                    </Box>
-                  )}
-                </Typography>
-              </MenuItem>
+              <HStack spacing={2}>
+                <Avatar 
+                  size="sm" 
+                  name={user?.username || 'User'} 
+                  bg={isAdmin ? 'purple.500' : 'blue.500'} 
+                  color="white" 
+                />
+                <Box display={{ base: 'none', md: 'block' }}>
+                  <Text fontSize="sm" fontWeight="medium">{user?.username || 'Kullanıcı'}</Text>
+                  <Text fontSize="xs" color="gray.400">
+                    {isAdmin ? 'Admin' : 'Kullanıcı'}
+                  </Text>
+                </Box>
+              </HStack>
+            </MenuButton>
+            
+            <MenuList
+              className="dropdown-menu"
+              zIndex={999}
+            >
+              <Box px={3} py={2} mb={2}>
+                <Text fontWeight="medium">{user?.username || 'Kullanıcı'}</Text>
+                <Text fontSize="xs" color="gray.400">
+                  {user?.email || 'kullanici@ornek.com'}
+                </Text>
+              </Box>
               
-              <Divider />
+              <MenuDivider />
               
-              <MenuItem onClick={handleGoToDashboard}>
-                <Dashboard fontSize="small" sx={{ mr: 1 }} />
+              <MenuItem className="dropdown-item" onClick={handleGoToDashboard}>
+                <ChatIcon />
                 Raporlar
               </MenuItem>
               
               {isAdmin && (
-                <MenuItem onClick={handleGoToAdmin}>
-                  <AdminPanelSettings fontSize="small" sx={{ mr: 1 }} />
+                <MenuItem className="dropdown-item" onClick={handleGoToAdmin}>
+                  <SettingsIcon />
                   Admin Paneli
                 </MenuItem>
               )}
               
-              <MenuItem onClick={handleLogout}>
-                <ExitToApp fontSize="small" sx={{ mr: 1 }} />
+              <MenuDivider />
+              
+              <MenuItem className="dropdown-item" onClick={handleLogout}>
                 Çıkış Yap
               </MenuItem>
-            </Menu>
-          </Box>
-        </Box>
-      </Toolbar>
-    </AppBar>
+            </MenuList>
+          </Menu>
+        </HStack>
+      </Flex>
+    </Box>
   );
 };
 

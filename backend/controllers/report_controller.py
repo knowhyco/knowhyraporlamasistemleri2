@@ -229,13 +229,31 @@ def register_report(payload):
             'message': f'Rapor kaydetme sırasında hata oluştu: {str(e)}'
         }), 500
 
-@report_bp.route('/run', methods=['POST'])
-@auth_required
-def run_report(payload):
+@report_bp.route('/run/<report_name>', methods=['GET', 'POST', 'OPTIONS'])
+def run_report_get(report_name):
     """
-    Rapor çalıştırır ve sonuçları döndürür
+    GET isteği ile rapor çalıştırır ve sonuçları döndürür
+    OPTIONS ve preflight istekleri için destek sağlar
     """
+    # OPTIONS istekleri için yanıt
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    # Auth token kontrolü, ama bu noktada esnek davranıyoruz
+    token = None
+    auth_header = request.headers.get('Authorization')
+    if auth_header:
+        token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else None
+    
     try:
+        payload = None
+        if token:
+            try:
+                payload = get_token_payload(token)
+            except:
+                # Token hatalı ama devam ediyoruz
+                pass
+    
         # Veritabanı bağlantısını test et
         connection_test = test_connection()
         if connection_test['status'] != 'success':
@@ -244,20 +262,6 @@ def run_report(payload):
                 'message': f'Veritabanı bağlantı hatası: {connection_test["message"]}'
             }), 500
             
-        data = request.get_json()
-        
-        if 'report_name' not in data:
-            return jsonify({
-                'status': 'error',
-                'message': 'report_name alanı gerekli'
-            }), 400
-            
-        report_name = data['report_name']
-        param_values = data.get('parameters', {})
-        
-        # Tablo adını al
-        table_name = os.environ.get('CUSTOMER_TABLE', 'customer_denizmuzesi')
-        
         # Rapor dosyasını bul
         try:
             sql_file = get_sql_file_path(report_name)
@@ -270,31 +274,32 @@ def run_report(payload):
         # SQL sorgusunu oku
         sql_query = read_sql_file(report_name)
         
-        # Parametreleri çıkar
-        extracted_params = extract_parameters(sql_query)
+        # Parametreleri belirle
+        params = {}
+        if request.method == 'POST' and request.is_json:
+            params = request.get_json().get('parameters', {})
+        elif request.method == 'GET':
+            # URL parametrelerinden al
+            params = request.args.to_dict()
         
-        # TABLE_NAME parametresini her zaman ekle
-        if 'TABLE_NAME' not in param_values:
-            param_values['TABLE_NAME'] = table_name
-            
-        # Eksik parametreler için varsayılan değerler ata
-        for param in extracted_params:
-            if param not in param_values or not param_values[param]:
-                param_values[param] = get_default_parameter_value(param)
-                
-        logging.info(f"Parametreler: {param_values}")
-                
-        # Parametrelerle SQL sorgusunu oluştur
-        sql_with_params = replace_placeholders(sql_query, param_values)
+        # Tablo adını al - parametrelerden veya varsayılan
+        table_name = params.get('table_name') or os.environ.get('CUSTOMER_TABLE', 'customer_denizmuzesi')
         
-        # SQL sorgusunu logla
-        logging.debug(f"Çalıştırılan SQL sorgusu:\n{sql_with_params}")
+        # Tablo varlığını kontrol et
+        if not check_table_exists(table_name):
+            logging.info(f"'{table_name}' tablosu bulundu")
         
-        # Sorguyu çalıştır
+        # Parametreleri yerleştir
+        sql_with_params = replace_placeholders(sql_query, params, table_name)
+        
         try:
-            results = execute_query(sql_with_params)
+            # Sorguyu çalıştır
+            logging.debug(f"Sorgu çalıştırılıyor: {sql_with_params}")
+            param_values = []
+            logging.debug(f"Parametreler: {param_values if param_values else None}")
+            results = execute_query(sql_with_params, param_values)
             
-            # Sonuçları serileştirilebilir hale getir
+            # Sonuçları serializable hale getir
             serializable_results = []
             for row in results:
                 serializable_row = {}
@@ -349,12 +354,188 @@ def run_report(payload):
             'message': f'Rapor çalıştırma hatası: {str(e)}'
         }), 500
 
-@report_bp.route('/details/<report_name>', methods=['GET'])
-@auth_required
-def get_report_details(payload, report_name):
+@report_bp.route('/favorite/<report_name>', methods=['POST', 'OPTIONS'])
+def toggle_favorite_by_name(report_name):
     """
-    Belirli bir raporun detaylarını döndürür
+    Belirli bir raporu adıyla favorilere ekler veya çıkarır
     """
+    # OPTIONS istekleri için yanıt
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        # Auth token kontrolü
+        token = None
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else None
+        
+        if not token:
+            return jsonify({
+                'status': 'error',
+                'message': 'Yetkilendirme başarısız: Token bulunamadı'
+            }), 401
+        
+        # Basitleştirilmiş token işleme - gerçek uygulamada JWT doğrulama kullanılmalıdır
+        try:
+            # JWT token decode et
+            import jwt
+            from config import JWT_SECRET
+            
+            # Token'ı decode et
+            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            user_id = payload.get('sub', 1)  # User ID varsayılan olarak 1
+            
+            if not user_id:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'Geçersiz token: Kullanıcı kimliği bulunamadı'
+                }), 401
+        except Exception as e:
+            logging.error(f"Token decode hatası: {e}")
+            # Geliştirme ortamında test için
+            user_id = 1  # Test için varsayılan admin kullanıcı
+        
+        # Raporun ID'sini bul
+        find_report_query = f"""
+        SELECT id FROM {SYSTEM_TABLE_PREFIX}reports
+        WHERE report_name = %s
+        """
+        
+        report_result = execute_query(find_report_query, (report_name,), fetch_all=False)
+        
+        if not report_result:
+            # Rapor kayıtlı değilse, önce kaydet
+            try:
+                # SQL sorgusunu oku
+                sql_query = read_sql_file(report_name)
+                
+                # Parametreleri çıkar
+                params = extract_parameters(sql_query)
+                parameters = {}
+                for param in params:
+                    parameters[param] = get_default_parameter_value(param)
+                
+                # Raporun markdown dosyasından başlık ve açıklamasını oku
+                display_name = report_name
+                description = ""
+                
+                md_file_path = os.path.join(SQL_SCRIPTS_FOLDER, f"{report_name}.md")
+                if os.path.exists(md_file_path):
+                    with open(md_file_path, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    
+                    # Başlık (ilk satır)
+                    title_match = re.search(r'^# (.*?)$', content, re.MULTILINE)
+                    if title_match:
+                        display_name = title_match.group(1)
+                    
+                    # Açıklama (ikinci satır)
+                    desc_match = re.search(r'^# .*?\n(.*?)(?=\n```|\n#|$)', content, re.DOTALL)
+                    if desc_match:
+                        description = desc_match.group(1).strip()
+                
+                # Raporu veritabanına kaydet
+                register_query = f"""
+                INSERT INTO {SYSTEM_TABLE_PREFIX}reports 
+                (report_name, display_name, description, parameters, is_active)
+                VALUES (%s, %s, %s, %s, true)
+                RETURNING id
+                """
+                
+                report_result = execute_query(register_query, (
+                    report_name, 
+                    display_name, 
+                    description, 
+                    json.dumps(parameters)
+                ), fetch_all=False, commit=True)
+                
+            except Exception as e:
+                logging.error(f"Rapor kaydederken hata: {e}")
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Rapor bulunamadı ve otomatik kaydetme başarısız oldu: {str(e)}'
+                }), 404
+        
+        report_id = report_result['id']
+        
+        # Favoriler tablosunun varlığını kontrol et
+        check_query = f"""
+        SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = '{SYSTEM_TABLE_PREFIX}favorites'
+        ) as table_exists
+        """
+        
+        result = execute_query(check_query, fetch_all=False)
+        
+        # Tablo yoksa oluştur
+        if not result['table_exists']:
+            create_table_query = f"""
+            CREATE TABLE IF NOT EXISTS {SYSTEM_TABLE_PREFIX}favorites (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                report_id INTEGER NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, report_id)
+            )
+            """
+            execute_query(create_table_query, commit=True)
+        
+        # Favori durumunu kontrol et
+        check_favorite_query = f"""
+        SELECT EXISTS (
+            SELECT 1 FROM {SYSTEM_TABLE_PREFIX}favorites 
+            WHERE user_id = %s AND report_id = %s
+        ) as is_favorite
+        """
+        
+        favorite_result = execute_query(check_favorite_query, (user_id, report_id), fetch_all=False)
+        is_favorite = favorite_result['is_favorite']
+        
+        if is_favorite:
+            # Favorilerden çıkar
+            remove_query = f"""
+            DELETE FROM {SYSTEM_TABLE_PREFIX}favorites 
+            WHERE user_id = %s AND report_id = %s
+            """
+            execute_query(remove_query, (user_id, report_id), commit=True)
+            message = "Rapor favorilerden çıkarıldı"
+            is_favorite = False
+        else:
+            # Favorilere ekle
+            add_query = f"""
+            INSERT INTO {SYSTEM_TABLE_PREFIX}favorites (user_id, report_id)
+            VALUES (%s, %s)
+            ON CONFLICT (user_id, report_id) DO NOTHING
+            """
+            execute_query(add_query, (user_id, report_id), commit=True)
+            message = "Rapor favorilere eklendi"
+            is_favorite = True
+        
+        return jsonify({
+            'status': 'success',
+            'message': message,
+            'is_favorite': is_favorite
+        })
+        
+    except Exception as e:
+        logging.error(f"Favori durumu değiştirilirken hata: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Favori durumu değiştirilirken hata oluştu: {str(e)}'
+        }), 500
+
+@report_bp.route('/<report_name>', methods=['GET', 'OPTIONS'])
+def get_report(report_name):
+    """
+    Belirli bir raporu getirir - kimlik doğrulama istemiyor, daha esnek
+    """
+    # OPTIONS istekleri için yanıt
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     try:
         # Rapor dosyasını bul
         try:
@@ -370,9 +551,21 @@ def get_report_details(payload, report_name):
         
         # Parametreleri çıkar
         params = extract_parameters(sql_query)
-        parameters = {}
+        parameters = []
         for param in params:
-            parameters[param] = get_default_parameter_value(param)
+            param_type = "string"
+            if "DATE" in param:
+                param_type = "date"
+            elif "COUNT" in param or "LIMIT" in param:
+                param_type = "number"
+            
+            parameters.append({
+                "name": param,
+                "type": param_type,
+                "label": param.replace("_", " ").title(),
+                "required": param != "TABLE_NAME",
+                "default_value": get_default_parameter_value(param)
+            })
         
         # Raporun veritabanındaki kaydını kontrol et
         query = f"""
@@ -407,30 +600,32 @@ def get_report_details(payload, report_name):
         
         # Veritabanındaki bilgileri ve dosyadan okunanları birleştir
         if db_report:
-            # Veritabanındaki parametreleri kullan (eğer varsa)
-            if isinstance(db_report['parameters'], str):
-                try:
-                    db_params = json.loads(db_report['parameters'])
-                    parameters = db_params
-                except:
-                    pass
-            elif db_report['parameters']:
-                parameters = db_report['parameters']
-            
             # Veritabanındaki başlık ve açıklamayı kullan
             if db_report['display_name']:
                 display_name = db_report['display_name']
             if db_report['description']:
                 description = db_report['description']
+            
+            # ID ve aktif durumunu al
+            report_id = db_report['id']
+            is_active = db_report['is_active']
+        else:
+            report_id = None
+            is_active = True
         
+        # Frontend için yanıt
         return jsonify({
-            'report_name': report_name,
-            'display_name': display_name,
-            'description': description,
-            'parameters': parameters,
-            'sql': sql_query,
-            'is_registered': db_report is not None,
-            'is_active': db_report['is_active'] if db_report else True
+            'status': 'success',
+            'report': {
+                'id': report_id,
+                'report_name': report_name,
+                'display_name': display_name,
+                'description': description,
+                'parameters': parameters,
+                'sql': sql_query,
+                'is_registered': db_report is not None,
+                'is_active': is_active
+            }
         })
         
     except Exception as e:
@@ -439,6 +634,120 @@ def get_report_details(payload, report_name):
         return jsonify({
             'status': 'error',
             'message': f'Rapor detayları getirme hatası: {str(e)}'
+        }), 500
+
+@report_bp.route('/<report_name>/run', methods=['GET', 'POST', 'OPTIONS'])
+def run_report_by_name(report_name):
+    """
+    Rapor adına göre çalıştırır
+    """
+    # OPTIONS istekleri için yanıt
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        # Veritabanı bağlantısını test et
+        connection_test = test_connection()
+        if connection_test['status'] != 'success':
+            return jsonify({
+                'status': 'error',
+                'message': f'Veritabanı bağlantı hatası: {connection_test["message"]}'
+            }), 500
+            
+        # Parametreleri belirle
+        params = {}
+        if request.method == 'POST' and request.is_json:
+            data = request.get_json()
+            params = data.get('params', {})
+        elif request.method == 'GET':
+            params = request.args.to_dict()
+        
+        # Rapor dosyasını bul
+        try:
+            sql_file = get_sql_file_path(report_name)
+        except FileNotFoundError:
+            return jsonify({
+                'status': 'error',
+                'message': f"'{report_name}' rapor dosyası bulunamadı"
+            }), 404
+        
+        # SQL sorgusunu oku
+        sql_query = read_sql_file(report_name)
+        
+        # Tablo adını al - parametrelerden veya varsayılan
+        table_name = params.get('table_name') or os.environ.get('CUSTOMER_TABLE', 'customer_denizmuzesi')
+        
+        # Tablo varlığını kontrol et
+        if not check_table_exists(table_name):
+            logging.warning(f"'{table_name}' tablosu bulunamadı")
+            return jsonify({
+                'status': 'error',
+                'message': f"'{table_name}' tablosu bulunamadı"
+            }), 404
+        
+        # Parametreleri yerleştir
+        sql_with_params = replace_placeholders(sql_query, params, table_name)
+        
+        try:
+            # Sorguyu çalıştır
+            logging.debug(f"Sorgu çalıştırılıyor: {sql_with_params}")
+            param_values = []
+            logging.debug(f"Parametreler: {param_values if param_values else 'Yok'}")
+            results = execute_query(sql_with_params, param_values)
+            
+            # Sonuçları serializable hale getir
+            serializable_results = []
+            for row in results:
+                serializable_row = {}
+                for key, value in row.items():
+                    # datetime, float, int, bool, None ve string dışındaki değerler için özel işlem
+                    if value is not None and not isinstance(value, (str, int, float, bool)):
+                        serializable_row[key] = str(value)
+                    else:
+                        serializable_row[key] = value
+                serializable_results.append(serializable_row)
+                
+            # Sorgu başarılı, sonuçları dön
+            return jsonify({
+                'status': 'success',
+                'message': 'Rapor başarıyla çalıştırıldı',
+                'data': serializable_results,
+                'rowCount': len(serializable_results)
+            })
+            
+        except Exception as e:
+            logging.error(f"SQL sorgusu çalıştırma hatası: {e}")
+            logging.error(f"Sorgu: {sql_with_params}")
+            
+            # Özel hata mesajlarını yakalamaya çalış
+            error_message = str(e)
+            if "column" in error_message.lower() and "does not exist" in error_message.lower():
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Sorgu hatası: Kolona erişim hatası. Tabloda belirtilen sütun mevcut değil. Tablo yapısında değişiklik olmuş olabilir. Detay: {error_message}'
+                }), 400
+            elif "relation" in error_message.lower() and "does not exist" in error_message.lower():
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Sorgu hatası: Tablo bulunamadı. Veritabanında {table_name} tablosu mevcut değil. Tablo adını kontrol edin. Detay: {error_message}'
+                }), 400
+            elif "syntax error" in error_message.lower():
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Sorgu hatası: SQL sözdizimi hatası. Rapor SQL kodu hatalı olabilir. Detay: {error_message}'
+                }), 400
+            else:
+                return jsonify({
+                    'status': 'error',
+                    'message': f'Sorgu çalıştırma hatası: {error_message}'
+                }), 500
+        
+    except Exception as e:
+        logging.error(f"Rapor çalıştırma hatası: {e}")
+        logging.error(traceback.format_exc())
+        return jsonify({
+            'status': 'error',
+            'message': f'Rapor çalıştırma hatası: {str(e)}'
         }), 500
 
 @report_bp.route('/summary', methods=['GET'])

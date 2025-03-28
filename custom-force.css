@@ -1,0 +1,2 @@
+/* Tasarımı değiştirmek için CSS stilleri */ .stat-card { box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1) !important; border-radius: 16px !important; transition: all 0.3s ease !important; } .stat-card:hover { transform: translateY(-5px) !important; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2) !important; }
+.card-header { font-weight: 600 !important; font-size: 18px !important; } .stat-icon { padding: 12px !important; border-radius: 50% !important; } .stat-value { font-size: 24px !important; font-weight: 700 !important; }

@@ -1,0 +1,5 @@
+.dashboard-card { border-radius: 16px; box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1); transition: all 0.3s ease; overflow: hidden; } 
+.dashboard-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15); } 
+.stat-icon { padding: 12px; border-radius: 50%; display: flex; align-items: center; justify-content: center; } 
+.stat-value { font-size: 24px; font-weight: 700; } 
+.dashboard-container { padding: 20px; }

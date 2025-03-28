@@ -79,19 +79,28 @@ def extract_parameters(sql_query):
     # Tekrar eden parametreleri çıkar ve sırala
     return sorted(list(set(param_matches)))
 
-def replace_placeholders(sql_query, params):
+def replace_placeholders(sql_query, params, default_table_name=None):
     """
     SQL sorgusundaki yer tutucuları gerçek değerlerle değiştirir.
     
     Args:
         sql_query (str): SQL sorgusu
         params (dict): Parametre adı-değer çiftleri
+        default_table_name (str, optional): Eğer TABLE_NAME parametresi bulunamazsa kullanılacak tablo adı
         
     Returns:
         str: Parametrelerle değiştirilmiş SQL sorgusu
     """
     result = sql_query
     
+    # Önce TABLE_NAME parametresini kontrol et ve işle
+    if 'TABLE_NAME' in result and 'TABLE_NAME' not in params and default_table_name:
+        result = result.replace('{TABLE_NAME}', default_table_name)
+    # table_name parametresi varsa ve TABLE_NAME yoksa
+    elif 'table_name' in params and 'TABLE_NAME' not in params:
+        result = result.replace('{TABLE_NAME}', params['table_name'])
+    
+    # Diğer tüm parametreleri işle
     for key, value in params.items():
         # Güvenlik: Tehlikeli karakterleri temizle
         if isinstance(value, str):
@@ -100,6 +109,11 @@ def replace_placeholders(sql_query, params):
         
         # {KEY} placeholder'ını değerle değiştir
         result = result.replace(f"{{{key}}}", str(value))
+    
+    # Eksik parametreler için uyarı log'u
+    missing_params = extract_parameters(result)
+    if missing_params:
+        logging.warning(f"Değiştirilmemiş parametreler mevcut: {', '.join(missing_params)}")
     
     return result
 

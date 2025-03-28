@@ -71,8 +71,15 @@ except Exception as e:
 app = Flask(__name__)
 app.json_encoder = CustomJSONEncoder  # Özel JSON encoder'ı kullan
 
-# CORS yapılandırması - sadece Frontend için
-CORS(app, resources={r"/*": {"origins": "http://3.90.113.180:3000"}})
+# CORS yapılandırması - Frontend için genişletilmiş
+# CORS başlıklarının çakışmasını önlemek için CORS konfigürasyonunu değiştiriyoruz
+# Otomatik CORS header ekleme FlaskCORS'a bırakılıyor, manuel ekleme kaldırılıyor
+CORS(app, resources={r"/*": {
+    "origins": "http://3.90.113.180:3000", 
+    "supports_credentials": True,
+    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+    "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+}})
 
 # socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -90,14 +97,7 @@ app.register_blueprint(report_bp, url_prefix='/api/reports')
 from controllers.user_controller import user_bp as auth_bp
 app.register_blueprint(auth_bp, url_prefix='/api/auth', name='auth')
 
-# OPTIONS istekleri için özel handler - after_request içinde CORS başlıklarını belirtme
-@app.after_request
-def after_request(response):
-    # Access-Control-Allow-Origin header'ını burada eklemeyi kaldırıyoruz
-    # çünkü flask-cors zaten bunu ekliyor
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    return response
+# OPTIONS istekleri için özel handler artık gerekli değil - CORS paketi bunu otomatik yapacak
 
 # Ana root endpoint
 @app.route('/')

@@ -40,7 +40,7 @@ const apiInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   },
-  withCredentials: false // CORS için false olarak değiştiriyoruz
+  withCredentials: false // CORS için false olarak ayarlıyoruz
 });
 
 // Uzun sürebilecek işlemler için ayrı bir instance

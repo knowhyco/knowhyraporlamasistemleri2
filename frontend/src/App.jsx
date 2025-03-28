@@ -38,6 +38,7 @@ import {
 } from '@chakra-ui/icons';
 import ReportsPage from './pages/ReportsPage';
 import theme from './theme';
+import "./custom.css";
 
 // Tema renkleri
 const primaryColor = "#3182CE"; // Ana mavi renk
