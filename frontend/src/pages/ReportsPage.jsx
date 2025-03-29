@@ -110,6 +110,33 @@ import {
 import api from '../services/apiConfig';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ResponsiveGridLayout } from 'react-grid-layout';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip as RechartsTooltip, 
+  PieChart, 
+  Pie as PieRecharts, 
+  BarChart as RechartsBarChart, 
+  ResponsiveContainer,
+  Cell 
+} from 'recharts';
+import { 
+  ChatBubbleLeftRightIcon, 
+  InformationCircleIcon, 
+  ClockIcon, 
+  EyeIcon, 
+  ArrowDownTrayIcon,
+  MagnifyingGlassIcon,
+  Squares2X2Icon,
+  ListBulletIcon,
+  ArrowPathIcon,
+  CogIcon
+} from '@heroicons/react/24/outline';
+import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid';
 
 // Chart.js bileşenlerini kaydet
 ChartJS.register(
@@ -190,6 +217,10 @@ const ReportsPage = () => {
   const [timeRange, setTimeRange] = useState('24h');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [refreshInterval, setRefreshInterval] = useState(30000); // 30 saniye
+  const [hourlyActivity, setHourlyActivity] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalPosition, setModalPosition] = useState({ top: 0, left: 0 });
+  const [isCustomizing, setIsCustomizing] = useState(false);
   const [dashboardData, setDashboardData] = useState({
     totalSessions: 0,
     totalMessages: 0,
@@ -207,6 +238,41 @@ const ReportsPage = () => {
     topTopics: [],
     weeklyActivity: [0, 0, 0, 0, 0, 0, 0], // Haftanın günlerine göre
     recentActivities: []
+  });
+  const [layouts, setLayouts] = useState({
+    lg: [
+      { i: 'totalSessions', x: 0, y: 0, w: 3, h: 1 },
+      { i: 'totalMessages', x: 3, y: 0, w: 3, h: 1 },
+      { i: 'responseTime', x: 6, y: 0, w: 3, h: 1 },
+      { i: 'contextUsage', x: 9, y: 0, w: 3, h: 1 },
+      { i: 'hourlyActivity', x: 0, y: 1, w: 8, h: 2 },
+      { i: 'topTopics', x: 8, y: 1, w: 4, h: 2 },
+      { i: 'weeklyActivity', x: 0, y: 3, w: 4, h: 2 },
+      { i: 'recentActivities', x: 4, y: 3, w: 4, h: 4 },
+      { i: 'sqlReports', x: 8, y: 3, w: 4, h: 2 }
+    ],
+    md: [
+      { i: 'totalSessions', x: 0, y: 0, w: 3, h: 1 },
+      { i: 'totalMessages', x: 3, y: 0, w: 3, h: 1 },
+      { i: 'responseTime', x: 0, y: 1, w: 3, h: 1 },
+      { i: 'contextUsage', x: 3, y: 1, w: 3, h: 1 },
+      { i: 'hourlyActivity', x: 0, y: 2, w: 6, h: 2 },
+      { i: 'topTopics', x: 0, y: 4, w: 6, h: 2 },
+      { i: 'weeklyActivity', x: 0, y: 6, w: 6, h: 2 },
+      { i: 'recentActivities', x: 0, y: 8, w: 6, h: 3 },
+      { i: 'sqlReports', x: 0, y: 11, w: 6, h: 2 }
+    ],
+    sm: [
+      { i: 'totalSessions', x: 0, y: 0, w: 2, h: 1 },
+      { i: 'totalMessages', x: 2, y: 0, w: 2, h: 1 },
+      { i: 'responseTime', x: 0, y: 1, w: 2, h: 1 },
+      { i: 'contextUsage', x: 2, y: 1, w: 2, h: 1 },
+      { i: 'hourlyActivity', x: 0, y: 2, w: 4, h: 2 },
+      { i: 'topTopics', x: 0, y: 4, w: 4, h: 2 },
+      { i: 'weeklyActivity', x: 0, y: 6, w: 4, h: 2 },
+      { i: 'recentActivities', x: 0, y: 8, w: 4, h: 3 },
+      { i: 'sqlReports', x: 0, y: 11, w: 4, h: 2 }
+    ]
   });
 
   // Tema renkleri
@@ -318,7 +384,7 @@ const ReportsPage = () => {
         if (summaryRes.data.status === 'success') {
           console.log("Summary data fetched:", summaryRes.data.summary);
           setSummaryData(summaryRes.data.summary);
-      }
+        }
         
         // Örnek dashboard verisi
         setDashboardData({
@@ -334,22 +400,57 @@ const ReportsPage = () => {
           sessionTrend: -2.8,
           avgResponseTime: 12.5,
           avgSessionDuration: 12.5,
-          messagesByHour: {
-            labels: Array.from({length: 24}, (_, i) => `${i}:00`),
-            values: Array.from({length: 24}, (_, i) => i * 25)
-          },
-          topTopics: {
-            labels: ['Çalışma Saatleri', 'Bilet Fiyatları', 'Osmanlı Dönemi', 'Deniz Araçları', 'Atatürk'],
-            values: [245, 198, 156, 134, 112]
-          },
-          weeklyActivity: [25, 40, 35, 50, 49, 60, 70],
+          messagesByHour: [
+            { hour: '00:00', value: 25 },
+            { hour: '01:00', value: 20 },
+            { hour: '02:00', value: 15 },
+            { hour: '03:00', value: 10 },
+            { hour: '04:00', value: 5 },
+            { hour: '05:00', value: 8 },
+            { hour: '06:00', value: 12 },
+            { hour: '07:00', value: 30 },
+            { hour: '08:00', value: 50 },
+            { hour: '09:00', value: 85 },
+            { hour: '10:00', value: 120 },
+            { hour: '11:00', value: 150 },
+            { hour: '12:00', value: 180 },
+            { hour: '13:00', value: 210 },
+            { hour: '14:00', value: 190 },
+            { hour: '15:00', value: 200 },
+            { hour: '16:00', value: 180 },
+            { hour: '17:00', value: 160 },
+            { hour: '18:00', value: 140 },
+            { hour: '19:00', value: 110 },
+            { hour: '20:00', value: 90 },
+            { hour: '21:00', value: 70 },
+            { hour: '22:00', value: 50 },
+            { hour: '23:00', value: 35 }
+          ],
+          topTopics: [
+            { name: 'Çalışma Saatleri', value: 245 },
+            { name: 'Bilet Fiyatları', value: 198 },
+            { name: 'Osmanlı Dönemi', value: 156 },
+            { name: 'Deniz Araçları', value: 134 },
+            { name: 'Atatürk', value: 112 }
+          ],
+          weeklyActivity: [
+            { day: 'Pazar', value: 25 },
+            { day: 'Pazartesi', value: 40 },
+            { day: 'Salı', value: 35 },
+            { day: 'Çarşamba', value: 50 },
+            { day: 'Perşembe', value: 49 },
+            { day: 'Cuma', value: 60 },
+            { day: 'Cumartesi', value: 70 }
+          ],
           recentActivities: Array.from({length: 5}, (_, i) => ({
             id: i + 1,
-            activity: i % 2 === 0 ? 'Yeni oturum başlatıldı' : 'Rapor çalıştırıldı',
-            date: new Date(Date.now() - i * 3600000).toLocaleString()
+            session_id: `SES-${Math.floor(1000 + Math.random() * 9000)}`,
+            message_count: Math.floor(5 + Math.random() * 20),
+            session_duration: `${Math.floor(5 + Math.random() * 15)} dakika`,
+            last_message: new Date(Date.now() - i * 3600000).toISOString()
           }))
         });
-    } catch (err) {
+      } catch (err) {
         console.error('Error fetching data:', err);
         setError('Veriler yüklenirken bir hata oluştu');
         toast({
@@ -359,10 +460,10 @@ const ReportsPage = () => {
           duration: 5000,
           isClosable: true,
         });
-    } finally {
-      setLoading(false);
-    }
-  };
+      } finally {
+        setLoading(false);
+      }
+    };
   
     fetchData();
 
@@ -384,8 +485,8 @@ const ReportsPage = () => {
     if (!searchTerm.trim()) return reports;
     
     return reports.filter(report => 
-      report.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.description.toLowerCase().includes(searchTerm.toLowerCase())
+      report.display_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [reports, searchTerm]);
 
@@ -430,731 +531,1015 @@ const ReportsPage = () => {
     }
   };
 
-  // Rapor detay modalı
-  const ReportDetailModal = ({ report, isOpen, onClose }) => {
-    if (!report) return null;
+  // Favori raporları getir
+  const fetchFavorites = async () => {
+    try {
+      const response = await api.get('/reports/favorites');
+      setFavorites(response.data.favorites || []);
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+    }
+  };
+
+  // Layout değişikliklerini kaydet
+  const onLayoutChange = (layout, layouts) => {
+    setLayouts(layouts);
+    // Tercihleri localStorage'a kaydedebiliriz
+    localStorage.setItem('dashboardLayouts', JSON.stringify(layouts));
+  };
+
+  // Layout'ları sıfırla
+  const resetLayout = () => {
+    // Varsayılan layout'u yükle
+    setLayouts({
+      lg: [
+        { i: 'totalSessions', x: 0, y: 0, w: 3, h: 1 },
+        { i: 'totalMessages', x: 3, y: 0, w: 3, h: 1 },
+        { i: 'responseTime', x: 6, y: 0, w: 3, h: 1 },
+        { i: 'contextUsage', x: 9, y: 0, w: 3, h: 1 },
+        { i: 'hourlyActivity', x: 0, y: 1, w: 8, h: 2 },
+        { i: 'topTopics', x: 8, y: 1, w: 4, h: 2 },
+        { i: 'weeklyActivity', x: 0, y: 3, w: 4, h: 2 },
+        { i: 'recentActivities', x: 4, y: 3, w: 4, h: 4 },
+        { i: 'sqlReports', x: 8, y: 3, w: 4, h: 2 }
+      ],
+      md: [
+        { i: 'totalSessions', x: 0, y: 0, w: 3, h: 1 },
+        { i: 'totalMessages', x: 3, y: 0, w: 3, h: 1 },
+        { i: 'responseTime', x: 0, y: 1, w: 3, h: 1 },
+        { i: 'contextUsage', x: 3, y: 1, w: 3, h: 1 },
+        { i: 'hourlyActivity', x: 0, y: 2, w: 6, h: 2 },
+        { i: 'topTopics', x: 0, y: 4, w: 6, h: 2 },
+        { i: 'weeklyActivity', x: 0, y: 6, w: 6, h: 2 },
+        { i: 'recentActivities', x: 0, y: 8, w: 6, h: 3 },
+        { i: 'sqlReports', x: 0, y: 11, w: 6, h: 2 }
+      ],
+      sm: [
+        { i: 'totalSessions', x: 0, y: 0, w: 2, h: 1 },
+        { i: 'totalMessages', x: 2, y: 0, w: 2, h: 1 },
+        { i: 'responseTime', x: 0, y: 1, w: 2, h: 1 },
+        { i: 'contextUsage', x: 2, y: 1, w: 2, h: 1 },
+        { i: 'hourlyActivity', x: 0, y: 2, w: 4, h: 2 },
+        { i: 'topTopics', x: 0, y: 4, w: 4, h: 2 },
+        { i: 'weeklyActivity', x: 0, y: 6, w: 4, h: 2 },
+        { i: 'recentActivities', x: 0, y: 8, w: 4, h: 3 },
+        { i: 'sqlReports', x: 0, y: 11, w: 4, h: 2 }
+      ]
+    });
+    localStorage.removeItem('dashboardLayouts');
+    toast({
+      title: 'Dashboard sıfırlandı',
+      description: 'Düzen varsayılan haline getirildi',
+      status: 'success',
+      duration: 3000,
+      isClosable: true,
+    });
+  };
+
+  // Özelleştirme modunu aç/kapa
+  const toggleCustomizeMode = () => {
+    setIsCustomizing(!isCustomizing);
+  };
+
+  // İstatistik Kartı Bileşeni
+  const StatCard = ({ title, value, icon, trend, trendDirection, color, id }) => {
+    return (
+      <div 
+        className={`relative p-5 rounded-xl bg-opacity-80 backdrop-blur-lg border border-slate-700 transition-all duration-200 h-full
+                   bg-slate-800 hover:bg-slate-700 hover:-translate-y-1 hover:shadow-xl
+                   ${isCustomizing ? 'cursor-move' : 'cursor-default'}`} 
+        id={id}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="text-sm text-gray-400 mb-1">{title}</div>
+            <div className="text-2xl font-bold text-white">{value}</div>
+            
+            {trend && (
+              <div className={`inline-flex items-center px-2 py-0.5 mt-2 rounded-full text-xs font-medium
+                             ${trendDirection > 0 
+                               ? 'bg-green-900 bg-opacity-40 text-green-400' 
+                               : 'bg-red-900 bg-opacity-40 text-red-400'}`}>
+                {trendDirection > 0 ? (
+                  <ArrowUpIcon className="w-3 h-3 mr-1" />
+                ) : (
+                  <ArrowDownIcon className="w-3 h-3 mr-1" />
+                )}
+                {Math.abs(trend)}% {trendDirection > 0 ? 'artış' : 'azalış'}
+              </div>
+            )}
+          </div>
+          
+          <div className={`flex items-center justify-center w-10 h-10 rounded-lg 
+                         ${color === 'blue' ? 'bg-blue-900 bg-opacity-30 text-blue-500' : 
+                           color === 'green' ? 'bg-green-900 bg-opacity-30 text-green-500' : 
+                           color === 'yellow' ? 'bg-yellow-900 bg-opacity-30 text-yellow-500' : 
+                           color === 'purple' ? 'bg-purple-900 bg-opacity-30 text-purple-500' : 
+                           'bg-slate-900 bg-opacity-30 text-slate-500'}`}>
+            {icon}
+          </div>
+        </div>
+        
+        {color === 'purple' && (
+          <div className="mt-3 w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-purple-500" 
+              style={{ width: `${dashboardData.contextUsage.percentage}%` }}
+            ></div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Kart Bileşeni
+  const Card = ({ title, children, className = '', actionButton = null, id }) => {
+    return (
+      <div 
+        className={`relative rounded-xl bg-slate-800 bg-opacity-80 backdrop-blur-lg border border-slate-700 
+                   overflow-hidden transition-all duration-200 h-full 
+                   ${isCustomizing ? 'cursor-move' : 'cursor-default'} ${className}`}
+        id={id}
+      >
+        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+          <h3 className="text-md font-semibold text-white">{title}</h3>
+          {actionButton}
+        </div>
+        <div className="p-4">
+          {children}
+        </div>
+      </div>
+    );
+  };
+
+  // Rapor Detay Modalı
+  const ReportDetailModal = () => {
+    if (!selectedReport) return null;
 
     return (
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{report.display_name}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <Text mb={4}>{report.description}</Text>
-            <Divider my={3} />
-            <Heading size="sm" mb={2}>Parametreler</Heading>
-            {report.parameters && Object.keys(report.parameters).length > 0 ? (
-              <SimpleGrid columns={2} spacing={4}>
-                {Object.entries(report.parameters).map(([key, value]) => (
-                  <Box key={key}>
-                    <Text fontWeight="bold">{key}</Text>
-                    <Text>{value || 'Varsayılan'}</Text>
-                  </Box>
-                ))}
-              </SimpleGrid>
-            ) : (
-              <Text>Bu rapor parametre gerektirmez.</Text>
-            )}
+      <div className={`fixed inset-0 z-50 flex items-center justify-center ${isModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-300`}>
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
+        
+        <div className="relative bg-slate-800 w-full max-w-2xl rounded-xl overflow-hidden shadow-2xl">
+          <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-white">{selectedReport.display_name}</h3>
+            <button 
+              className="text-gray-400 hover:text-white"
+              onClick={() => setIsModalOpen(false)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+          
+          <div className="px-6 py-4">
+            <p className="text-gray-300 mb-4">{selectedReport.description}</p>
             
-              <Button
-              mt={6} 
-                colorScheme="blue"
-                onClick={() => {
-                  onClose();
-                handleReportClick(report);
-                }}
-              width="full"
-              >
-                Raporu Görüntüle
-              </Button>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+            <div className="border-t border-slate-700 my-4 pt-4">
+              <h4 className="text-sm font-semibold text-white mb-2">Parametreler</h4>
+              
+              {selectedReport.parameters && Object.keys(selectedReport.parameters).length > 0 ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {Object.entries(selectedReport.parameters).map(([key, value]) => (
+                    <div key={key}>
+                      <div className="text-sm font-medium text-white">{key}</div>
+                      <div className="text-sm text-gray-400">{value || 'Varsayılan'}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-400">Bu rapor parametre gerektirmez.</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="px-6 py-4 bg-slate-900 flex justify-end">
+            <button
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+              onClick={() => {
+                setIsModalOpen(false);
+                handleReportClick(selectedReport);
+              }}
+            >
+              Raporu Görüntüle
+            </button>
+          </div>
+        </div>
+      </div>
     );
   };
 
   // Ana dashboard gösterimi
   const renderDashboard = () => (
-    <Box className="page-container">
-      {/* Dashboard Başlık */}
-      <Flex justifyContent="space-between" alignItems="center" mb={5}>
-        <Box>
-          <Heading as="h1" fontSize="2xl" fontWeight="700" mb={1}>
-            Knowhy Raporlama Sistemi
-          </Heading>
-          <Text color="gray.400" fontSize="sm">
-            Son güncelleme: {new Date().toLocaleString('tr-TR')}
-          </Text>
-        </Box>
-        <HStack spacing={3}>
-          <Menu>
-            <MenuButton
-              as={Button}
-              rightIcon={<ChevronDownIcon />}
-              variant="outline"
-              className="btn-outline"
-              size="sm"
+    <div className="relative">
+      {/* Customization Bar */}
+      {isCustomizing && (
+        <div className="mb-4 p-3 bg-slate-900 rounded-lg border border-slate-700 flex items-center justify-between">
+          <div className="text-white">
+            <span className="font-medium">Düzenleme Modu:</span> 
+            <span className="ml-2 text-yellow-400">Widget'ları sürükleyip bırakarak dashboardı özelleştirebilirsiniz</span>
+          </div>
+          <div className="flex space-x-2">
+            <button 
+              className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-sm rounded"
+              onClick={resetLayout}
             >
-              {timeRange === '24h' && 'Son 24 Saat'}
-              {timeRange === '7d' && 'Son 7 Gün'}
-              {timeRange === '30d' && 'Son 30 Gün'}
-              {timeRange === 'custom' && 'Özel Aralık'}
-            </MenuButton>
-            <MenuList>
-              <MenuItem onClick={() => setTimeRange('24h')}>Son 24 Saat</MenuItem>
-              <MenuItem onClick={() => setTimeRange('7d')}>Son 7 Gün</MenuItem>
-              <MenuItem onClick={() => setTimeRange('30d')}>Son 30 Gün</MenuItem>
-              <MenuItem onClick={() => setTimeRange('custom')}>Özel Aralık</MenuItem>
-            </MenuList>
-          </Menu>
-          <Button
-            className="custom-button btn-primary"
-            size="sm"
-            leftIcon={<RepeatIcon />}
+              Sıfırla
+            </button>
+            <button 
+              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-sm rounded"
+              onClick={toggleCustomizeMode}
+            >
+              Tamamla
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Dashboard Başlık */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-1">
+            Knowhy Raporlama Sistemi
+          </h1>
+          <p className="text-sm text-gray-400">
+            Son güncelleme: {new Date().toLocaleString('tr-TR')}
+          </p>
+        </div>
+        <div className="flex space-x-2">
+          <div className="relative">
+            <button
+              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm rounded-lg border border-slate-700 flex items-center space-x-1"
+              onClick={() => document.getElementById('timeRangeDropdown').classList.toggle('hidden')}
+            >
+              <span>
+                {timeRange === '24h' && 'Son 24 Saat'}
+                {timeRange === '7d' && 'Son 7 Gün'}
+                {timeRange === '30d' && 'Son 30 Gün'}
+                {timeRange === 'custom' && 'Özel Aralık'}
+              </span>
+              <ChevronDownIcon className="w-4 h-4" />
+            </button>
+            
+            <div id="timeRangeDropdown" className="absolute right-0 mt-1 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
+              <ul className="py-1">
+                <li>
+                  <button 
+                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
+                    onClick={() => {
+                      setTimeRange('24h');
+                      document.getElementById('timeRangeDropdown').classList.add('hidden');
+                    }}
+                  >
+                    Son 24 Saat
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
+                    onClick={() => {
+                      setTimeRange('7d');
+                      document.getElementById('timeRangeDropdown').classList.add('hidden');
+                    }}
+                  >
+                    Son 7 Gün
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
+                    onClick={() => {
+                      setTimeRange('30d');
+                      document.getElementById('timeRangeDropdown').classList.add('hidden');
+                    }}
+                  >
+                    Son 30 Gün
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
+                    onClick={() => {
+                      setTimeRange('custom');
+                      document.getElementById('timeRangeDropdown').classList.add('hidden');
+                    }}
+                  >
+                    Özel Aralık
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+          <button
+            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg flex items-center space-x-1"
             onClick={() => {
               setLoading(true);
               fetchDashboardData();
             }}
           >
-            Yenile
-          </Button>
-        </HStack>
-      </Flex>
+            <ArrowPathIcon className="w-4 h-4" />
+            <span>Yenile</span>
+          </button>
+          
+          <button
+            className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg flex items-center space-x-1"
+            onClick={toggleCustomizeMode}
+          >
+            <CogIcon className="w-4 h-4" />
+            <span>Özelleştir</span>
+          </button>
+        </div>
+      </div>
 
-      {/* İstatistik Kartları */}
-      <Box className="dashboard-grid" mb={6}>
-        <Box className="stat-card">
-          <Box className="stat-icon-container">
-            <ChatIcon />
-          </Box>
-          <Box className="stat-value">{dashboardData.totalSessions.toLocaleString()}</Box>
-          <Box className="stat-label">Toplam Oturum</Box>
-          <Box className={`stat-trend ${dashboardData.sessionTrend > 0 ? 'trend-up' : 'trend-down'}`}>
-            {dashboardData.sessionTrend > 0 ? <ArrowUpIcon mr={1} /> : <ArrowDownIcon mr={1} />}
-            {Math.abs(dashboardData.sessionTrend)}% {dashboardData.sessionTrend > 0 ? 'artış' : 'azalış'}
-          </Box>
-        </Box>
-
-        <Box className="stat-card success">
-          <Box className="stat-icon-container">
-            <InfoIcon />
-          </Box>
-          <Box className="stat-value">{dashboardData.totalMessages.toLocaleString()}</Box>
-          <Box className="stat-label">Toplam Mesaj</Box>
-          <Box className={`stat-trend ${dashboardData.messageTrend > 0 ? 'trend-up' : 'trend-down'}`}>
-            {dashboardData.messageTrend > 0 ? <ArrowUpIcon mr={1} /> : <ArrowDownIcon mr={1} />}
-            {Math.abs(dashboardData.messageTrend)}% {dashboardData.messageTrend > 0 ? 'artış' : 'azalış'}
-          </Box>
-        </Box>
-
-        <Box className="stat-card warning">
-          <Box className="stat-icon-container">
-            <TimeIcon />
-          </Box>
-          <Box className="stat-value">{dashboardData.avgResponseTime.toFixed(2)}s</Box>
-          <Box className="stat-label">Ortalama Yanıt Süresi</Box>
-          <Box className="stat-trend trend-up">
-            <ArrowUpIcon mr={1} />
-            5.2% daha hızlı
-          </Box>
-        </Box>
-
-        <Box className="stat-card info">
-          <Box className="stat-icon-container">
-            <ViewIcon />
-          </Box>
-          <Box className="stat-value">{dashboardData.contextUsage.percentage}%</Box>
-          <Box className="stat-label">Context Kullanım Oranı</Box>
-          <Box className="progress-container" mt={2}>
-            <Box 
-              className="progress-bar" 
-              width={`${dashboardData.contextUsage.percentage}%`}
-            ></Box>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Üst Ana Grafikler */}
-      <Box className="dashboard-grid">
-        {/* Saatlik Aktivite Grafiği - 2 kolon genişliğinde */}
-        <Box className="dashboard-card dashboard-grid-col-2">
-          <Box className="card-header">
-            <Heading as="h3" fontSize="md">Saatlik Mesaj Aktivitesi</Heading>
-            <HStack>
-              <Menu>
-                <MenuButton
-                  as={IconButton}
-                  size="sm"
-                  variant="ghost"
-                  icon={<SettingsIcon />}
-                  aria-label="Grafik ayarları"
-                />
-                <MenuList>
-                  <MenuItem icon={<DownloadIcon />}>CSV olarak indir</MenuItem>
-                  <MenuItem icon={<RepeatIcon />}>Yenile</MenuItem>
-                </MenuList>
-              </Menu>
-            </HStack>
-          </Box>
-          <Box className="card-body">
-            <Box className="chart-container" height="300px">
-              {loading ? (
-                <Skeleton height="100%" />
-              ) : (
-                <Line
-                  data={{
-                    labels: dashboardData.messagesByHour.labels,
-                    datasets: [
-                      {
-                        label: 'Mesaj Sayısı',
-                        data: dashboardData.messagesByHour.values,
-                        fill: true,
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderColor: '#3b82f6',
-                        tension: 0.4,
-                        pointBackgroundColor: '#3b82f6',
-                        pointRadius: 3,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        display: false,
-                      },
-                      tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        titleColor: 'rgba(248, 250, 252, 0.95)',
-                        bodyColor: 'rgba(248, 250, 252, 0.95)',
-                        cornerRadius: 8,
-                        padding: 12,
-                        displayColors: false,
-                      },
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        grid: {
-                          color: 'rgba(203, 213, 225, 0.1)',
-                        },
-                        ticks: {
-                          color: 'rgba(203, 213, 225, 0.8)',
-                        }
-                      },
-                      x: {
-                        grid: {
-                          display: false,
-                        },
-                        ticks: {
-                          color: 'rgba(203, 213, 225, 0.8)',
-                        }
-                      },
-                    },
-                    interaction: {
-                      intersect: false,
-                      mode: 'index',
-                    },
-                    elements: {
-                      line: {
-                        borderWidth: 2,
-                      },
-                    },
-                  }}
-                />
-              )}
-            </Box>
-          </Box>
-        </Box>
-
-        {/* En Çok Konuşulan Konular - 1 kolon genişliğinde */}
-        <Box className="glass-card">
-          <Box className="card-header">
-            <Heading as="h3" fontSize="md">En Çok Konuşulan Konular</Heading>
-          </Box>
-          <Box className="card-body">
-            <Box className="chart-container" height="220px">
-              {loading ? (
-                <Skeleton height="100%" width="100%" />
-              ) : (
-                <Doughnut
-                  data={{
-                    labels: dashboardData.topTopics.labels,
-                    datasets: [
-                      {
-                        data: dashboardData.topTopics.values,
-                        backgroundColor: [
-                          'rgba(37, 99, 235, 0.8)',
-                          'rgba(16, 185, 129, 0.8)', 
-                          'rgba(239, 68, 68, 0.8)',
-                          'rgba(245, 158, 11, 0.8)',
-                          'rgba(99, 102, 241, 0.8)',
-                        ],
-                        borderColor: [
-                          'rgba(37, 99, 235, 1)',
-                          'rgba(16, 185, 129, 1)',
-                          'rgba(239, 68, 68, 1)',
-                          'rgba(245, 158, 11, 1)',
-                          'rgba(99, 102, 241, 1)',
-                        ],
-                        borderWidth: 1,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        position: 'bottom',
-                        labels: {
-                          padding: 20,
-                          usePointStyle: true,
-                          pointStyle: 'circle',
-                          color: 'rgba(203, 213, 225, 0.9)',
-                          font: {
-                            size: 11
-                          }
-                        },
-                      },
-                      tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        titleColor: 'rgba(248, 250, 252, 0.95)',
-                        bodyColor: 'rgba(248, 250, 252, 0.95)',
-                        cornerRadius: 8,
-                        padding: 12,
-                      },
-                    },
-                    cutout: '70%',
-                  }}
-                />
-              )}
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Haftalık Aktivite - 1 kolon genişliğinde */}
-        <Box className="dashboard-card">
-          <Box className="card-header">
-            <Heading as="h3" fontSize="md">Haftalık Aktivite Dağılımı</Heading>
-          </Box>
-          <Box className="card-body">
-            <Box className="chart-container" height="220px">
-              {loading ? (
-                <Skeleton height="100%" />
-              ) : (
-                <Bar
-                  data={{
-                    labels: ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'],
-                    datasets: [
-                      {
-                        label: 'Oturum Sayısı',
-                        data: dashboardData.weeklyActivity,
-                        backgroundColor: 'rgba(14, 165, 233, 0.7)',
-                        borderColor: 'rgba(14, 165, 233, 1)',
-                        borderWidth: 1,
-                        borderRadius: 6,
-                      },
-                    ],
-                  }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      legend: {
-                        display: false,
-                      },
-                      tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        titleColor: 'rgba(248, 250, 252, 0.95)',
-                        bodyColor: 'rgba(248, 250, 252, 0.95)',
-                        cornerRadius: 8,
-                        padding: 12,
-                        displayColors: false,
-                      },
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        grid: {
-                          color: 'rgba(203, 213, 225, 0.1)',
-                        },
-                        ticks: {
-                          color: 'rgba(203, 213, 225, 0.8)',
-                        }
-                      },
-                      x: {
-                        grid: {
-                          display: false,
-                        },
-                        ticks: {
-                          color: 'rgba(203, 213, 225, 0.8)',
-                        }
-                      },
-                    },
-                  }}
-                />
-              )}
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Son Aktiviteler - 1 kolon genişliğinde */}
-        <Box className="dashboard-card dashboard-grid-row-2">
-          <Box className="card-header">
-            <Heading as="h3" fontSize="md">Son Aktiviteler</Heading>
-            <HStack>
-              <Badge className="badge-primary">Canlı</Badge>
-            </HStack>
-          </Box>
-          <Box className="card-body" overflowY="auto" maxHeight="480px">
-            {loading ? (
-              Array(5).fill(0).map((_, index) => (
-                <Skeleton height="80px" mb={3} key={index} />
-              ))
-            ) : (
-              dashboardData.recentActivities.map((activity, index) => (
-                <Box key={index} className="activity-item">
-                  <Box className="activity-icon">
-                    <ChatIcon />
-                  </Box>
-                  <Box className="activity-content">
-                    <Box className="activity-title">{activity.session_id}</Box>
-                    <Box className="activity-subtitle">
-                      {activity.message_count} mesaj • {activity.session_duration}
-                    </Box>
-                  </Box>
-                  <Box className="activity-time">
-                    {new Date(activity.last_message).toLocaleTimeString('tr-TR')}
-                  </Box>
-                </Box>
-              ))
-            )}
-          </Box>
-        </Box>
-
-        {/* SQL Raporları - 2 kolon genişliğinde */}
-        <Box className="dashboard-card dashboard-grid-col-2">
-          <Box className="card-header">
-            <Heading as="h3" fontSize="md">SQL Raporları</Heading>
-            <Button 
-              size="sm" 
-              className="custom-button btn-primary"
-              onClick={() => setSelectedTab(1)}
-            >
-              Tüm Raporlar
-            </Button>
-          </Box>
-          <Box className="card-body">
-            <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={4}>
-              {reports.slice(0, 6).map((report) => (
-                <Box 
-                  key={report.id} 
-                  className="report-card"
-                  onClick={() => handleReportClick(report)}
-                  cursor="pointer"
+      {/* React Grid Layout ile Dashboard */}
+      <ResponsiveGridLayout
+        className="layout"
+        layouts={layouts}
+        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+        cols={{ lg: 12, md: 6, sm: 4, xs: 2, xxs: 1 }}
+        rowHeight={130}
+        onLayoutChange={onLayoutChange}
+        isDraggable={isCustomizing}
+        isResizable={isCustomizing}
+        isBounded={true}
+        margin={[16, 16]}
+        containerPadding={[0, 0]}
+      >
+        {/* İstatistik Kartları */}
+        <div key="totalSessions">
+          <StatCard 
+            id="totalSessions"
+            title="Toplam Oturum" 
+            value={dashboardData.totalSessions.toLocaleString()} 
+            icon={<ChatBubbleLeftRightIcon className="w-6 h-6" />}
+            trend={Math.abs(dashboardData.sessionTrend)}
+            trendDirection={dashboardData.sessionTrend}
+            color="blue"
+          />
+        </div>
+        
+        <div key="totalMessages">
+          <StatCard 
+            id="totalMessages"
+            title="Toplam Mesaj" 
+            value={dashboardData.totalMessages.toLocaleString()} 
+            icon={<InformationCircleIcon className="w-6 h-6" />}
+            trend={Math.abs(dashboardData.messageTrend)}
+            trendDirection={dashboardData.messageTrend}
+            color="green"
+          />
+        </div>
+        
+        <div key="responseTime">
+          <StatCard 
+            id="responseTime"
+            title="Ortalama Yanıt Süresi" 
+            value={`${dashboardData.avgResponseTime.toFixed(2)}s`} 
+            icon={<ClockIcon className="w-6 h-6" />}
+            trend={5.2}
+            trendDirection={1}
+            color="yellow"
+          />
+        </div>
+        
+        <div key="contextUsage">
+          <StatCard 
+            id="contextUsage"
+            title="Context Kullanım Oranı" 
+            value={`${dashboardData.contextUsage.percentage}%`} 
+            icon={<EyeIcon className="w-6 h-6" />}
+            color="purple"
+          />
+        </div>
+        
+        {/* Saatlik Aktivite Grafiği */}
+        <div key="hourlyActivity">
+          <Card 
+            id="hourlyActivity"
+            title="Saatlik Mesaj Aktivitesi" 
+            actionButton={
+              <div className="relative">
+                <button
+                  className="text-gray-400 hover:text-white"
+                  onClick={() => document.getElementById('hourlyDropdown').classList.toggle('hidden')}
                 >
-                  <Box className="report-card-header">
-                    <Text fontWeight="600" fontSize="sm" noOfLines={1}>{report.name}</Text>
-                    <IconButton
-                      aria-label="Favori"
-                      icon={favorites.includes(report.id) ? <StarIcon color="yellow.400" /> : <StarOutlineIcon />}
-                      size="sm"
-                      variant="ghost"
+                  <CogIcon className="w-5 h-5" />
+                </button>
+                
+                <div id="hourlyDropdown" className="absolute right-0 mt-1 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
+                  <ul className="py-1">
+                    <li>
+                      <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left flex items-center">
+                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
+                        CSV olarak indir
+                      </button>
+                    </li>
+                    <li>
+                      <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left flex items-center">
+                        <ArrowPathIcon className="w-4 h-4 mr-2" />
+                        Yenile
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            }
+          >
+            <div className="h-[260px] w-full">
+              {loading ? (
+                <div className="animate-pulse h-full w-full bg-slate-700"></div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={dashboardData.messagesByHour}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis 
+                      dataKey="hour" 
+                      tick={{ fill: '#9ca3af' }} 
+                      axisLine={{ stroke: '#4b5563' }}
+                    />
+                    <YAxis 
+                      tick={{ fill: '#9ca3af' }} 
+                      axisLine={{ stroke: '#4b5563' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#1f2937', 
+                        borderColor: '#374151', 
+                        color: '#f9fafb',
+                        borderRadius: '0.375rem'
+                      }}
+                      labelStyle={{ color: '#f9fafb', fontWeight: 'bold' }}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#3b82f6" 
+                      fillOpacity={1} 
+                      fill="url(#colorValue)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+        </div>
+        
+        {/* En Çok Konuşulan Konular - Pie Chart */}
+        <div key="topTopics">
+          <Card 
+            id="topTopics" 
+            title="En Çok Konuşulan Konular"
+          >
+            <div className="h-[260px] w-full">
+              {loading ? (
+                <div className="animate-pulse h-full w-full bg-slate-700"></div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <PieRecharts
+                      data={dashboardData.topTopics}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      innerRadius={50}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {dashboardData.topTopics.map((entry, index) => (
+                        <cell key={`cell-${index}`} fill={[
+                          '#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6'
+                        ][index % 5]} />
+                      ))}
+                    </PieRecharts>
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#1f2937', 
+                        borderColor: '#374151', 
+                        color: '#f9fafb',
+                        borderRadius: '0.375rem'
+                      }}
+                      formatter={(value, name, props) => [`${value} mesaj`, props.payload.name]}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+        </div>
+        
+        {/* Haftalık Aktivite Bar Chart */}
+        <div key="weeklyActivity">
+          <Card 
+            id="weeklyActivity" 
+            title="Haftalık Aktivite Dağılımı"
+          >
+            <div className="h-[260px] w-full">
+              {loading ? (
+                <div className="animate-pulse h-full w-full bg-slate-700"></div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsBarChart
+                    data={dashboardData.weeklyActivity}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                    <XAxis 
+                      dataKey="day" 
+                      tick={{ fill: '#9ca3af' }} 
+                      axisLine={{ stroke: '#4b5563' }}
+                    />
+                    <YAxis 
+                      tick={{ fill: '#9ca3af' }} 
+                      axisLine={{ stroke: '#4b5563' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#1f2937', 
+                        borderColor: '#374151', 
+                        color: '#f9fafb',
+                        borderRadius: '0.375rem'
+                      }}
+                    />
+                    <RechartsBarChart.Bar 
+                      dataKey="value" 
+                      fill="#0ea5e9"
+                      radius={[4, 4, 0, 0]} 
+                    />
+                  </RechartsBarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+        </div>
+        
+        {/* Son Aktiviteler */}
+        <div key="recentActivities">
+          <Card 
+            id="recentActivities" 
+            title="Son Aktiviteler"
+            actionButton={
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
+                Canlı
+              </span>
+            }
+            className="overflow-hidden"
+          >
+            <div className="overflow-y-auto max-h-[550px] -mx-4 px-4">
+              {loading ? (
+                Array(5).fill(0).map((_, index) => (
+                  <div key={index} className="animate-pulse mb-4">
+                    <div className="h-20 bg-slate-700 rounded-lg"></div>
+                  </div>
+                ))
+              ) : (
+                dashboardData.recentActivities.map((activity, index) => (
+                  <div 
+                    key={index} 
+                    className="p-3 mb-3 bg-slate-700 bg-opacity-50 hover:bg-opacity-70 rounded-lg flex items-center transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-blue-900 bg-opacity-40 flex items-center justify-center mr-4 text-blue-400">
+                      <ChatBubbleLeftRightIcon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-white">{activity.session_id}</div>
+                      <div className="text-xs text-gray-400">
+                        {activity.message_count} mesaj • {activity.session_duration}
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {new Date(activity.last_message).toLocaleTimeString('tr-TR')}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+        
+        {/* SQL Raporları */}
+        <div key="sqlReports">
+          <Card 
+            id="sqlReports" 
+            title="SQL Raporları"
+            actionButton={
+              <button 
+                className="text-xs font-medium px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white transition-colors"
+                onClick={() => setSelectedTab(1)}
+              >
+                Tüm Raporlar
+              </button>
+            }
+          >
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              {reports.slice(0, 4).map((report) => (
+                <div 
+                  key={report.id} 
+                  className="p-3 bg-slate-700 bg-opacity-50 hover:bg-slate-600 rounded-lg cursor-pointer transition-colors"
+                  onClick={() => handleReportClick(report)}
+                >
+                  <div className="flex items-start justify-between">
+                    <h4 className="text-sm font-medium text-white line-clamp-1">{report.name}</h4>
+                    <button
+                      className="text-gray-400 hover:text-yellow-400"
                       onClick={(e) => {
                         e.stopPropagation();
                         handleToggleFavorite(report);
                       }}
-                    />
-                  </Box>
-                  <Box className="report-card-body">
-                    <Text fontSize="xs" color="gray.400" noOfLines={2}>
-                      {report.description || "Bu rapor için açıklama bulunmamaktadır."}
-                    </Text>
-                  </Box>
-                  <Box className="report-card-footer">
-                    <Badge className="badge-primary">{report.category}</Badge>
-                  </Box>
-                </Box>
+                    >
+                      {favorites.includes(report.id) 
+                        ? <StarIconSolid className="w-4 h-4 text-yellow-400" />
+                        : <StarIcon className="w-4 h-4" />
+                      }
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1 line-clamp-2">
+                    {report.description || "Bu rapor için açıklama bulunmamaktadır."}
+                  </p>
+                  <span className="inline-block mt-2 text-xs px-2 py-0.5 bg-blue-900 text-blue-300 rounded-full">
+                    {report.category || 'Genel'}
+                  </span>
+                </div>
               ))}
-            </SimpleGrid>
-          </Box>
-        </Box>
-      </Box>
-    </Box>
+            </div>
+          </Card>
+        </div>
+      </ResponsiveGridLayout>
+    </div>
   );
 
   // Rapor listesi render ediliyor
   const renderReportList = () => (
-    <Box>
+    <div>
       {/* Filtre ve arama bar */}
-      <Card className="stat-card" mb={6} borderRadius="xl">
-        <CardBody>
-          <Grid templateColumns="repeat(12, 1fr)" gap={4}>
-            <GridItem colSpan={{ base: 12, md: 5 }}>
-              <InputGroup>
-                <InputLeftElement pointerEvents="none">
-                  <SearchIcon color="gray.400" />
-                </InputLeftElement>
-                <Input 
-                  type="text" 
-                  placeholder="Rapor ara..."
-                  borderRadius="lg"
-                  onChange={(e) => setSearchTerm(e.target.value)} 
-                />
-              </InputGroup>
-            </GridItem>
-            
-            <GridItem colSpan={{ base: 6, md: 3 }}>
-              <Menu>
-                <MenuButton
-                  as={Button}
-                  rightIcon={<ChevronDownIcon />}
-                  width="100%"
-                  borderRadius="lg"
-                  variant="outline"
-                  className="modern-button"
-                >
-                  Kategori
-                </MenuButton>
-                <MenuList>
-                  <MenuItem>Tüm Kategoriler</MenuItem>
-                  <MenuItem>Zaman Bazlı Analizler</MenuItem>
-                  <MenuItem>İçerik Analizleri</MenuItem>
-                  <MenuItem>Performans Metrikleri</MenuItem>
-                  <MenuItem>Detaylı Görünümler</MenuItem>
-                </MenuList>
-              </Menu>
-            </GridItem>
-            
-            <GridItem colSpan={{ base: 6, md: 2 }}>
-              <Menu>
-                <MenuButton
-                  as={Button}
-                  rightIcon={<ChevronDownIcon />}
-                  width="100%"
-                  borderRadius="lg" 
-                  variant="outline"
-                  className="modern-button"
-                >
-                  Sırala
-                </MenuButton>
-                <MenuList>
-                  <MenuItem>İsme Göre (A-Z)</MenuItem>
-                  <MenuItem>İsme Göre (Z-A)</MenuItem>
-                  <MenuItem>En Sık Kullanılan</MenuItem>
-                  <MenuItem>En Son Eklenen</MenuItem>
-                </MenuList>
-              </Menu>
-            </GridItem>
-            
-            <GridItem colSpan={{ base: 12, md: 2 }}>
-              <ButtonGroup isAttached width="100%">
-                <Button 
-                  flex="1"
-                  borderRadius="lg 0 0 lg"
-                  colorScheme={viewMode === 'grid' ? 'blue' : 'gray'}
-                  onClick={() => setViewMode('grid')}
-                  aria-label="Grid view"
-                  className="modern-button"
-                >
-                  <Icon as={HamburgerIcon} />
-                </Button>
-                <Button 
-                  flex="1"
-                  borderRadius="0 lg lg 0"
-                  colorScheme={viewMode === 'list' ? 'blue' : 'gray'}
-                  onClick={() => setViewMode('list')}
-                  aria-label="List view"
-                  className="modern-button"
-                >
-                  <Icon as={ViewIcon} />
-                </Button>
-              </ButtonGroup>
-            </GridItem>
-          </Grid>
-        </CardBody>
-      </Card>
+      <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 shadow-lg">
+        <div className="grid grid-cols-12 gap-4">
+          <div className="col-span-12 md:col-span-5">
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                className="block w-full pl-10 pr-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Rapor ara..."
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+          
+          <div className="col-span-6 md:col-span-3">
+            <div className="relative">
+              <button
+                className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white flex items-center justify-between"
+                onClick={() => document.getElementById('categoryDropdown').classList.toggle('hidden')}
+              >
+                <span>Kategori</span>
+                <ChevronDownIcon className="h-5 w-5 text-gray-400" />
+              </button>
+              
+              <div id="categoryDropdown" className="absolute left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
+                <ul className="py-1">
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      Tüm Kategoriler
+                    </button>
+                  </li>
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      Zaman Bazlı Analizler
+                    </button>
+                  </li>
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      İçerik Analizleri
+                    </button>
+                  </li>
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      Performans Metrikleri
+                    </button>
+                  </li>
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      Detaylı Görünümler
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div className="col-span-6 md:col-span-2">
+            <div className="relative">
+              <button
+                className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white flex items-center justify-between"
+                onClick={() => document.getElementById('sortDropdown').classList.toggle('hidden')}
+              >
+                <span>Sırala</span>
+                <ChevronDownIcon className="h-5 w-5 text-gray-400" />
+              </button>
+              
+              <div id="sortDropdown" className="absolute left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
+                <ul className="py-1">
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      İsme Göre (A-Z)
+                    </button>
+                  </li>
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      İsme Göre (Z-A)
+                    </button>
+                  </li>
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      En Sık Kullanılan
+                    </button>
+                  </li>
+                  <li>
+                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
+                      En Son Eklenen
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div className="col-span-12 md:col-span-2">
+            <div className="flex rounded-lg overflow-hidden border border-slate-600">
+              <button
+                className={`flex-1 px-3 py-2.5 ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-gray-300 hover:bg-slate-600'}`}
+                onClick={() => setViewMode('grid')}
+              >
+                <Squares2X2Icon className="h-5 w-5 mx-auto" />
+              </button>
+              <button
+                className={`flex-1 px-3 py-2.5 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-gray-300 hover:bg-slate-600'}`}
+                onClick={() => setViewMode('list')}
+              >
+                <ListBulletIcon className="h-5 w-5 mx-auto" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
       
       {/* Rapor kartları grid */}
-      <SimpleGrid columns={{base: 1, md: 2, lg: viewMode === 'grid' ? 3 : 1}} spacing={5}>
-      {filteredReports.map(report => (
-        <Card className="stat-card" 
-          key={report.report_name}
-          cursor="pointer"
-          transition="all 0.3s"
-          borderWidth="1px"
-          borderRadius="xl"
-          onClick={() => handleReportClick(report)}
-        >
-          <CardHeader className="card-header" pb={0}>
-            <Flex>
-              <Heading size="md" isTruncated>{report.display_name}</Heading>
-              <Spacer />
-              <IconButton
-                icon={favorites.includes(report.report_name) ? <StarIcon /> : <StarOutlineIcon />}
-                variant="ghost"
-                aria-label="Favorite"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleFavorite(report);
-                }}
-                color={favorites.includes(report.report_name) ? "yellow.500" : "gray.400"}
-                className="modern-button"
-              />
-            </Flex>
-          </CardHeader>
-          <CardBody>
-            <Text noOfLines={2} mb={4}>{report.description}</Text>
-            <HStack spacing={2}>
-                <Badge colorScheme="blue" borderRadius="full" className="custom-badge">Güncel</Badge>
-              {report.parameters && Object.keys(report.parameters).length > 0 && (
-                  <Badge colorScheme="purple" borderRadius="full" className="custom-badge">Parametreli</Badge>
+      <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'grid-cols-1 gap-4'}`}>
+        {filteredReports.length === 0 ? (
+          <div className="col-span-full py-12 flex flex-col items-center justify-center bg-slate-800 rounded-xl border border-slate-700">
+            <div className="p-4 bg-slate-700 rounded-full mb-4">
+              <InformationCircleIcon className="h-8 w-8 text-blue-400" />
+            </div>
+            <h3 className="text-lg font-medium text-white mb-2">Rapor bulunamadı</h3>
+            <p className="text-gray-400 text-center max-w-md">
+              Arama kriterlerinize uygun rapor bulunamadı. Lütfen başka bir arama terimi deneyin veya filtreleri sıfırlayın.
+            </p>
+          </div>
+        ) : (
+          filteredReports.map(report => (
+            <motion.div
+              key={report.report_name}
+              className={`relative p-5 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500 transition-all duration-200 cursor-pointer
+                         group hover:-translate-y-1 hover:shadow-xl ${viewMode === 'list' ? 'flex items-start' : ''}`}
+              whileHover={{ scale: viewMode === 'grid' ? 1.02 : 1.01 }}
+              onClick={() => {
+                setSelectedReport(report);
+                setIsModalOpen(true);
+              }}
+            >
+              <div className={`${viewMode === 'list' ? 'flex-1' : ''}`}>
+                <div className="flex items-start justify-between">
+                  <h3 className={`font-semibold text-white ${viewMode === 'list' ? 'text-base' : 'text-lg mb-3'}`}>
+                    {report.display_name}
+                  </h3>
+                  <button
+                    className={`text-gray-400 hover:text-yellow-400 transition-colors ${viewMode === 'list' ? 'ml-2' : 'ml-4'}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleFavorite(report);
+                    }}
+                  >
+                    {favorites.includes(report.report_name) 
+                      ? <StarIconSolid className="h-5 w-5 text-yellow-400" />
+                      : <StarIcon className="h-5 w-5" />
+                    }
+                  </button>
+                </div>
+                
+                <p className={`text-gray-400 ${viewMode === 'list' ? 'text-sm line-clamp-1 mt-1' : 'mt-2 mb-4'}`}>
+                  {report.description || "Bu rapor için açıklama bulunmamaktadır."}
+                </p>
+                
+                <div className={`flex flex-wrap gap-2 ${viewMode === 'list' ? 'mt-2' : 'mt-4'}`}>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
+                    Güncel
+                  </span>
+                  {report.parameters && Object.keys(report.parameters).length > 0 && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900 text-purple-300">
+                      Parametreli
+                    </span>
+                  )}
+                  {report.is_registered && (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 text-green-300">
+                      Kayıtlı
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              {viewMode === 'list' && (
+                <button
+                  className="ml-6 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleReportClick(report);
+                  }}
+                >
+                  Görüntüle
+                </button>
               )}
-              {report.is_registered && (
-                  <Badge colorScheme="green" borderRadius="full" className="custom-badge">Kayıtlı</Badge>
-              )}
-            </HStack>
-          </CardBody>
-        </Card>
-      ))}
-    </SimpleGrid>
-    </Box>
+            </motion.div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  // Favori Raporları render etme
+  const renderFavoriteReports = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {favorites.length === 0 ? (
+        <div className="col-span-full py-12 flex flex-col items-center justify-center bg-slate-800 rounded-xl border border-slate-700">
+          <div className="p-4 bg-slate-700 rounded-full mb-4">
+            <StarIcon className="h-8 w-8 text-yellow-400" />
+          </div>
+          <h3 className="text-lg font-medium text-white mb-2">Henüz favori raporunuz yok</h3>
+          <p className="text-gray-400 text-center max-w-md">
+            Raporlar bölümünden sık kullandığınız raporları favorilere ekleyebilirsiniz.
+          </p>
+          <button
+            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+            onClick={() => setSelectedTab(1)}
+          >
+            Raporları Görüntüle
+          </button>
+        </div>
+      ) : (
+        filteredReports
+          .filter(report => favorites.includes(report.report_name))
+          .map(report => (
+            <motion.div
+              key={report.report_name}
+              className="relative p-5 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500 transition-all duration-200 cursor-pointer
+                       group hover:-translate-y-1 hover:shadow-xl"
+              whileHover={{ scale: 1.02 }}
+              onClick={() => {
+                setSelectedReport(report);
+                setIsModalOpen(true);
+              }}
+            >
+              <div className="flex items-start justify-between">
+                <h3 className="font-semibold text-white text-lg mb-3">
+                  {report.display_name}
+                </h3>
+                <button
+                  className="text-yellow-400 ml-4"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleFavorite(report);
+                  }}
+                >
+                  <StarIconSolid className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <p className="text-gray-400 mt-2 mb-4">
+                {report.description || "Bu rapor için açıklama bulunmamaktadır."}
+              </p>
+              
+              <div className="flex flex-wrap gap-2 mt-4">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
+                  Güncel
+                </span>
+                {report.parameters && Object.keys(report.parameters).length > 0 && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900 text-purple-300">
+                    Parametreli
+                  </span>
+                )}
+                {report.is_registered && (
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 text-green-300">
+                    Kayıtlı
+                  </span>
+                )}
+              </div>
+            </motion.div>
+          ))
+      )}
+    </div>
   );
 
   // Ana render
-    return (
-    <Box p={4}>
-      <Flex mb={6} alignItems="center" className="navbar">
-        <Heading size="lg">Knowhy Raporlama</Heading>
-        <Spacer />
-        <HStack spacing={4}>
-          <Button
-            leftIcon={<RepeatIcon />}
-            colorScheme="blue"
-            variant="outline"
-            size="sm"
+  return (
+    <div className="min-h-screen bg-slate-900 text-white p-5">
+      {/* Üst Navbar */}
+      <div className="flex items-center justify-between mb-8 border-b border-slate-700 pb-4">
+        <h1 className="text-2xl font-bold">Knowhy Raporlama</h1>
+        
+        <div className="flex items-center space-x-4">
+          <button
+            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm rounded-lg border border-slate-700 flex items-center space-x-2"
             onClick={() => fetchDashboardData()}
-            isLoading={loading}
-            className="modern-button"
           >
-            Son 24 Saat
-          </Button>
-          <IconButton
-            aria-label="Ayarlar"
-            icon={<SettingsIcon />}
-            variant="ghost"
-            className="modern-button"
-          />
-          <Avatar
-            size="sm"
-            name="Knowhy Admin"
-            bg="blue.500"
-          />
-        </HStack>
-      </Flex>
+            <ArrowPathIcon className="h-4 w-4" />
+            <span className="hidden md:inline">{timeRange === '24h' ? 'Son 24 Saat' : timeRange === '7d' ? 'Son 7 Gün' : 'Son 30 Gün'}</span>
+          </button>
+          
+          <button
+            className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700"
+          >
+            <CogIcon className="h-5 w-5" />
+          </button>
+          
+          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-semibold">
+            K
+          </div>
+        </div>
+      </div>
 
       {/* Tab navigasyonu */}
-      <Tabs 
-        colorScheme="blue" 
-        variant="enclosed" 
-        index={selectedTab}
-        onChange={setSelectedTab}
-        mb={6}
-        className="tabs-container"
-      >
-        <TabList>
-          <Tab className="tab-button">Dashboard</Tab>
-          <Tab className="tab-button">Raporlar</Tab>
-          <Tab className="tab-button">Favoriler</Tab>
-        </TabList>
-        
-        <TabPanels mt={4}>
-          <TabPanel p={0}>
-            {renderDashboard()}
-          </TabPanel>
-          
-          <TabPanel p={0}>
-            {renderReportList()}
-          </TabPanel>
-          
-          <TabPanel p={0}>
-            <SimpleGrid columns={{base: 1, md: 2, lg: 3}} spacing={5}>
-            {favorites.length === 0 ? (
-                <Alert status="info" borderRadius="md">
-              <AlertIcon />
-                  <AlertTitle>Henüz favori raporunuz yok</AlertTitle>
-                  <AlertDescription>
-                    Raporlar bölümünden sık kullandığınız raporları favorilere ekleyebilirsiniz.
-                  </AlertDescription>
-            </Alert>
-          ) : (
-                filteredReports
-                  .filter(report => favorites.includes(report.report_name))
-                  .map(report => (
-                  <Card
-                      key={report.report_name}
-                      cursor="pointer"
-                      _hover={{ 
-                        transform: 'translateY(-5px)', 
-                        boxShadow: 'xl',
-                        borderColor: accentColor
-                      }}
-                      transition="all 0.3s"
-                    borderWidth="1px"
-                      borderRadius="xl"
-                      onClick={() => handleReportClick(report)}
-                    >
-                      <CardHeader className="card-header" pb={0}>
-                        <Flex>
-                          <Heading size="md" isTruncated>{report.display_name}</Heading>
-                          <Spacer />
-                            <IconButton
-                            icon={<StarIcon />}
-                              variant="ghost"
-                            aria-label="Remove from favorites"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleFavorite(report);
-                            }}
-                            color="yellow.500"
-                          />
-                        </Flex>
-                      </CardHeader>
-                      <CardBody>
-                        <Text noOfLines={2} mb={4}>{report.description}</Text>
-                        <HStack spacing={2}>
-                          <Badge colorScheme="blue" borderRadius="full">Güncel</Badge>
-                          {report.parameters && Object.keys(report.parameters).length > 0 && (
-                            <Badge colorScheme="purple" borderRadius="full">Parametreli</Badge>
-                          )}
-                          {report.is_registered && (
-                            <Badge colorScheme="green" borderRadius="full">Kayıtlı</Badge>
-                          )}
-                        </HStack>
-                    </CardBody>
-                  </Card>
-                  ))
-          )}
-            </SimpleGrid>
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
-
-      {/* Rapor detay modalı */}
-      {selectedReport && (
-      <ReportDetailModal
-        report={selectedReport}
-        isOpen={isOpen}
-          onClose={() => {
-            onClose();
-            setSelectedReport(null);
-          }}
-      />
+      <div className="mb-8">
+        <div className="flex border-b border-slate-700">
+          <button 
+            className={`px-6 py-3 text-sm font-medium ${
+              selectedTab === 0 
+                ? 'text-white border-b-2 border-blue-500' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+            onClick={() => setSelectedTab(0)}
+          >
+            Dashboard
+          </button>
+          <button 
+            className={`px-6 py-3 text-sm font-medium ${
+              selectedTab === 1 
+                ? 'text-white border-b-2 border-blue-500' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+            onClick={() => setSelectedTab(1)}
+          >
+            Raporlar
+          </button>
+          <button 
+            className={`px-6 py-3 text-sm font-medium ${
+              selectedTab === 2 
+                ? 'text-white border-b-2 border-blue-500' 
+                : 'text-gray-400 hover:text-white'
+            }`}
+            onClick={() => setSelectedTab(2)}
+          >
+            Favoriler
+          </button>
+        </div>
+      </div>
+      
+      {/* Tab içeriği */}
+      <div>
+        {selectedTab === 0 && renderDashboard()}
+        {selectedTab === 1 && renderReportList()}
+        {selectedTab === 2 && renderFavoriteReports()}
+      </div>
+      
+      {/* Rapor Detay Modalı */}
+      <ReportDetailModal />
+      
+      {/* Loading overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="flex flex-col items-center">
+            <svg className="animate-spin h-10 w-10 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="text-white text-lg">Yükleniyor...</p>
+          </div>
+        </div>
       )}
-    </Box>
+    </div>
   );
 };
 

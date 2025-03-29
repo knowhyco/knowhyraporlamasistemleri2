@@ -6,7 +6,7 @@
 
 @layer base {
   body {
-    @apply bg-navy-900 text-gray-100 font-sans antialiased;
+    @apply bg-slate-950 text-gray-100 antialiased;
   }
   
   h1, h2, h3, h4, h5, h6 {
@@ -16,11 +16,11 @@
 
 @layer components {
   .card {
-    @apply bg-navy-800 rounded-xl shadow-card border border-gray-700/30 p-4 transition-all;
+    @apply bg-slate-900 rounded-xl shadow-lg border border-slate-700/30 p-4 transition-all;
   }
   
   .card-hover {
-    @apply hover:shadow-card-hover hover:border-gray-600/30 transition-all duration-300;
+    @apply hover:shadow-xl hover:border-slate-600/30 transition-all duration-300;
   }
   
   .btn {
@@ -28,11 +28,11 @@
   }
   
   .btn-primary {
-    @apply bg-accent-blue text-white hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50;
+    @apply bg-primary-600 text-white hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-opacity-50;
   }
   
   .btn-secondary {
-    @apply bg-gray-700 text-white hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-50;
+    @apply bg-slate-700 text-white hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-opacity-50;
   }
   
   .progress-ring {
@@ -44,23 +44,23 @@
   }
   
   .sidebar-link.active {
-    @apply bg-accent-blue/20 text-white;
+    @apply bg-primary-600/20 text-white;
   }
   
   .input {
-    @apply bg-navy-700 border-gray-600 rounded-lg text-gray-200 focus:border-accent-blue focus:ring focus:ring-accent-blue/20 focus:outline-none;
+    @apply bg-slate-800 border-slate-600 rounded-lg text-gray-200 focus:border-primary-600 focus:ring focus:ring-primary-600/20 focus:outline-none;
   }
   
   .table-container {
-    @apply overflow-x-auto rounded-xl bg-navy-800 border border-gray-700/30;
+    @apply overflow-x-auto rounded-xl bg-slate-900 border border-slate-700/30;
   }
   
   .table {
-    @apply min-w-full divide-y divide-gray-700/30;
+    @apply min-w-full divide-y divide-slate-700/30;
   }
   
   .table-header {
-    @apply bg-navy-700 text-left;
+    @apply bg-slate-800 text-left;
   }
   
   .table-header-cell {
@@ -68,11 +68,11 @@
   }
   
   .table-body {
-    @apply bg-navy-800 divide-y divide-gray-700/30;
+    @apply bg-slate-900 divide-y divide-slate-700/30;
   }
   
   .table-row {
-    @apply hover:bg-navy-700/50 transition-colors;
+    @apply hover:bg-slate-800/50 transition-colors;
   }
   
   .table-cell {
@@ -80,11 +80,11 @@
   }
   
   .dropdown {
-    @apply absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-navy-700 ring-1 ring-black ring-opacity-5 divide-y divide-gray-700/30;
+    @apply absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-slate-800 ring-1 ring-black ring-opacity-5 divide-y divide-slate-700/30;
   }
   
   .dropdown-item {
-    @apply flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-navy-600 hover:text-white transition-colors;
+    @apply flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white transition-colors;
   }
 }
 
@@ -106,7 +106,7 @@
   --color-card: #1e293b;
   --color-card-hover: #283548;
   --color-accent: #3b82f6;
-  --color-success: #22c55e;
+  --color-success: #10b981;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
 } 
