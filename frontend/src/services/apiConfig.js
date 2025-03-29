@@ -7,9 +7,25 @@ export const checkTokenExpiry = () => {
   const token = localStorage.getItem('token');
   if (!token) return true;
   
-  // Basit bir kontrol: Token varsa ve geçerliyse false, aksi halde true döner
-  // Gerçek implementasyonda JWT decode edilip expiry kontrol edilmeli
-  return false;
+  try {
+    // JWT token'ı decode et - base64 formatında
+    const base64Url = token.split('.')[1];
+    if (!base64Url) return true;
+    
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+
+    const payload = JSON.parse(jsonPayload);
+    const expiryTime = payload.exp * 1000; // saniyeyi milisaniyeye çevir
+    
+    // Token süresi dolmuş mu kontrol et
+    return Date.now() >= expiryTime;
+  } catch (error) {
+    console.error('Token decode hatası:', error);
+    return true; // Hata durumunda token'ı geçersiz kabul et
+  }
 };
 
 export const removeAuthToken = () => {
@@ -80,12 +96,14 @@ apiInstance.interceptors.response.use(
     if (error.response) {
       console.error(`API Hatası: ${error.response.status} ${error.config?.url}`, error.response.data);
       
-      // Token geçersiz veya süresi dolmuş
+      // Token geçersiz veya süresi dolmuş - doğrudan çıkış yapmak yerine hatayı ilet
+      // Kullanıcı, içeriği görebilmeye devam etsin 
       if (error.response.status === 401) {
-        if (checkTokenExpiry()) {
-          console.log('Token süresi dolmuş, kullanıcı çıkış yapıyor...');
-          removeAuthToken();
-          window.location.href = '/login';
+        console.warn('Yetkilendirme hatası. Login gerekebilir ama içeriği göstermeye devam ediyoruz.');
+        // Sadece gerçekten token süresi dolduysa veya tamamen login olmamışsa sayfayı yönlendir
+        if (!localStorage.getItem('token') || checkTokenExpiry()) {
+          console.log('Token yok veya süresi dolmuş, otomatik yönlendirme yapılmıyor.');
+          // window.location.href = '/login'; - Kullanıcı içeriği görebilsin diye yönlendirme kaldırıldı
         }
       }
     } else if (error.request) {

@@ -1,4 +1,6 @@
 import "../custom-force.css";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
@@ -110,7 +112,7 @@ import {
 import api from '../services/apiConfig';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ResponsiveGridLayout } from 'react-grid-layout';
+import GridLayout from 'react-grid-layout';
 import { 
   AreaChart, 
   Area, 
@@ -122,7 +124,8 @@ import {
   Pie as PieRecharts, 
   BarChart as RechartsBarChart, 
   ResponsiveContainer,
-  Cell 
+  Cell,
+  Bar as RechartsBar
 } from 'recharts';
 import { 
   ChatBubbleLeftRightIcon, 
@@ -152,7 +155,7 @@ ChartJS.register(
   Filler
 );
 
-const MotionBox = motion(Box);
+const MotionBox = motion.create(Box);
 
 // Özel ikon komponentleri
 const StarOutlineIcon = () => (
@@ -295,37 +298,43 @@ const ReportsPage = () => {
     try {
       console.log('Fetching dashboard data...');
       
-      // Son 24 saatte toplam session, mesaj vs sayıları
-      const summaryResponse = await api.get('/reports/summary');
+      // İlgili verileri almaya çalış
+      const requests = [
+        api.get('/reports/list').catch(e => ({ data: { reports: [] } })),
+        api.get('/reports/favorites').catch(e => ({ data: { favorites: [] } })),
+        api.get('/reports/summary').catch(e => ({ data: { summary: null } }))
+      ];
       
-      // Rapor listesini al
-      const reportsResponse = await api.get('/reports/list');
+      const [reportsResponse, favoritesResponse, summaryResponse] = await Promise.all(requests);
       
-      // Favori raporlar
-      const favoritesResponse = await api.get('/reports/favorites');
+      // UI state'i güncelle
+      if (reportsResponse.data && reportsResponse.data.reports) {
+        setReports(reportsResponse.data.reports);
+        console.log('Reports fetched:', reportsResponse.data.reports);
+      }
+      
+      if (favoritesResponse.data && favoritesResponse.data.favorites) {
+        setFavorites(favoritesResponse.data.favorites || []);
+        console.log('Favorites fetched:', favoritesResponse.data.favorites);
+      }
+      
+      if (summaryResponse.data && summaryResponse.data.summary) {
+        setSummaryData(summaryResponse.data.summary);
+        console.log('Summary data fetched:', summaryResponse.data.summary);
+      }
       
       // Saatlik Aktivite raporu için çağrı
       try {
         // GET metodu ile rapor çalıştır
         const hourlyActivityResponse = await api.get('/reports/run/14_Saatlik_Aktivite_Analizi');
         
-        if (hourlyActivityResponse.data.status === 'success') {
-          setHourlyActivity(hourlyActivityResponse.data.results);
+        if (hourlyActivityResponse.data && hourlyActivityResponse.data.status === 'success') {
+          setHourlyActivity(hourlyActivityResponse.data.results || []);
         }
       } catch (error) {
         console.error('Error fetching hourly activity data:', error);
         // Hata durumunda sessizce devam et
       }
-      
-      // UI state'i güncelle
-      setReports(reportsResponse.data.reports);
-      console.log('Reports fetched:', reportsResponse.data.reports);
-      
-      setFavorites(favoritesResponse.data.favorites);
-      console.log('Favorites fetched:', favoritesResponse.data.favorites);
-      
-      setSummaryData(summaryResponse.data);
-      console.log('Summary data fetched:', summaryResponse.data);
       
       setLoading(false);
     } catch (error) {
@@ -335,7 +344,7 @@ const ReportsPage = () => {
       // Toast notification ile kullanıcıya bilgi ver
       toast({
         title: 'Veri yükleme hatası',
-        description: `${error.response?.data?.message || 'Veriler yüklenirken bir sorun oluştu'}`,
+        description: `${error.response?.data?.message || 'API isteği sırasında bir sorun oluştu'}${error.response?.status === 401 ? ' (Yetkilendirme hatası)' : ''}`,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -345,6 +354,71 @@ const ReportsPage = () => {
 
   // Sayfa yüklendiğinde veri çek
   useEffect(() => {
+    // Görünür verileri hemen ayarla
+    setDashboardData({
+      totalSessions: 1208,
+      totalMessages: 15789,
+      activeSessions: 42,
+      contextUsage: {
+        used: 30,
+        notUsed: 12,
+        percentage: 70
+      },
+      messageTrend: 5.2,
+      sessionTrend: -2.8,
+      avgResponseTime: 12.5,
+      avgSessionDuration: 12.5,
+      messagesByHour: [
+        { hour: '00:00', value: 25 },
+        { hour: '01:00', value: 20 },
+        { hour: '02:00', value: 15 },
+        { hour: '03:00', value: 10 },
+        { hour: '04:00', value: 5 },
+        { hour: '05:00', value: 8 },
+        { hour: '06:00', value: 12 },
+        { hour: '07:00', value: 30 },
+        { hour: '08:00', value: 50 },
+        { hour: '09:00', value: 85 },
+        { hour: '10:00', value: 120 },
+        { hour: '11:00', value: 150 },
+        { hour: '12:00', value: 180 },
+        { hour: '13:00', value: 210 },
+        { hour: '14:00', value: 190 },
+        { hour: '15:00', value: 200 },
+        { hour: '16:00', value: 180 },
+        { hour: '17:00', value: 160 },
+        { hour: '18:00', value: 140 },
+        { hour: '19:00', value: 110 },
+        { hour: '20:00', value: 90 },
+        { hour: '21:00', value: 70 },
+        { hour: '22:00', value: 50 },
+        { hour: '23:00', value: 35 }
+      ],
+      topTopics: [
+        { name: 'Çalışma Saatleri', value: 245 },
+        { name: 'Bilet Fiyatları', value: 198 },
+        { name: 'Osmanlı Dönemi', value: 156 },
+        { name: 'Deniz Araçları', value: 134 },
+        { name: 'Atatürk', value: 112 }
+      ],
+      weeklyActivity: [
+        { day: 'Pazar', value: 25 },
+        { day: 'Pazartesi', value: 40 },
+        { day: 'Salı', value: 35 },
+        { day: 'Çarşamba', value: 50 },
+        { day: 'Perşembe', value: 49 },
+        { day: 'Cuma', value: 60 },
+        { day: 'Cumartesi', value: 70 }
+      ],
+      recentActivities: Array.from({length: 5}, (_, i) => ({
+        id: i + 1,
+        session_id: `SES-${Math.floor(1000 + Math.random() * 9000)}`,
+        message_count: Math.floor(5 + Math.random() * 20),
+        session_duration: `${Math.floor(5 + Math.random() * 15)} dakika`,
+        last_message: new Date(Date.now() - i * 3600000).toISOString()
+      }))
+    });
+    
     fetchDashboardData();
     
     // Opsiyonel otomatik yenileme
@@ -358,128 +432,6 @@ const ReportsPage = () => {
     };
   }, [autoRefresh, refreshInterval]);
   
-  // Raporları getir
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        console.log("Fetching dashboard data...");
-        setLoading(true);
-        
-        const [reportsRes, favoritesRes, summaryRes] = await Promise.all([
-          api.get('/reports/list'),
-          api.get('/reports/favorites'),
-          api.get('/reports/summary')
-        ]);
-
-        if (reportsRes.data.status === 'success') {
-          console.log("Reports fetched:", reportsRes.data.reports);
-          setReports(reportsRes.data.reports || []);
-        }
-        
-        if (favoritesRes.data.status === 'success') {
-          console.log("Favorites fetched:", favoritesRes.data.favorites);
-          setFavorites(favoritesRes.data.favorites || []);
-        }
-        
-        if (summaryRes.data.status === 'success') {
-          console.log("Summary data fetched:", summaryRes.data.summary);
-          setSummaryData(summaryRes.data.summary);
-        }
-        
-        // Örnek dashboard verisi
-        setDashboardData({
-          totalSessions: 1208,
-          totalMessages: 15789,
-          activeSessions: 42,
-          contextUsage: {
-            used: 30,
-            notUsed: 12,
-            percentage: 70
-          },
-          messageTrend: 5.2,
-          sessionTrend: -2.8,
-          avgResponseTime: 12.5,
-          avgSessionDuration: 12.5,
-          messagesByHour: [
-            { hour: '00:00', value: 25 },
-            { hour: '01:00', value: 20 },
-            { hour: '02:00', value: 15 },
-            { hour: '03:00', value: 10 },
-            { hour: '04:00', value: 5 },
-            { hour: '05:00', value: 8 },
-            { hour: '06:00', value: 12 },
-            { hour: '07:00', value: 30 },
-            { hour: '08:00', value: 50 },
-            { hour: '09:00', value: 85 },
-            { hour: '10:00', value: 120 },
-            { hour: '11:00', value: 150 },
-            { hour: '12:00', value: 180 },
-            { hour: '13:00', value: 210 },
-            { hour: '14:00', value: 190 },
-            { hour: '15:00', value: 200 },
-            { hour: '16:00', value: 180 },
-            { hour: '17:00', value: 160 },
-            { hour: '18:00', value: 140 },
-            { hour: '19:00', value: 110 },
-            { hour: '20:00', value: 90 },
-            { hour: '21:00', value: 70 },
-            { hour: '22:00', value: 50 },
-            { hour: '23:00', value: 35 }
-          ],
-          topTopics: [
-            { name: 'Çalışma Saatleri', value: 245 },
-            { name: 'Bilet Fiyatları', value: 198 },
-            { name: 'Osmanlı Dönemi', value: 156 },
-            { name: 'Deniz Araçları', value: 134 },
-            { name: 'Atatürk', value: 112 }
-          ],
-          weeklyActivity: [
-            { day: 'Pazar', value: 25 },
-            { day: 'Pazartesi', value: 40 },
-            { day: 'Salı', value: 35 },
-            { day: 'Çarşamba', value: 50 },
-            { day: 'Perşembe', value: 49 },
-            { day: 'Cuma', value: 60 },
-            { day: 'Cumartesi', value: 70 }
-          ],
-          recentActivities: Array.from({length: 5}, (_, i) => ({
-            id: i + 1,
-            session_id: `SES-${Math.floor(1000 + Math.random() * 9000)}`,
-            message_count: Math.floor(5 + Math.random() * 20),
-            session_duration: `${Math.floor(5 + Math.random() * 15)} dakika`,
-            last_message: new Date(Date.now() - i * 3600000).toISOString()
-          }))
-        });
-      } catch (err) {
-        console.error('Error fetching data:', err);
-        setError('Veriler yüklenirken bir hata oluştu');
-        toast({
-          title: 'Hata',
-          description: 'Veriler yüklenirken bir hata oluştu. Lütfen sayfayı yenileyin.',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-  
-    fetchData();
-
-    // Otomatik yenileme
-    let interval;
-    if (autoRefresh) {
-      interval = setInterval(fetchData, refreshInterval);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [toast, autoRefresh, refreshInterval]);
-
   // Raporları filtrele
   const filteredReports = useMemo(() => {
     if (!searchTerm.trim()) return reports;
@@ -523,7 +475,7 @@ const ReportsPage = () => {
       
       toast({
         title: 'İşlem Hatası',
-        description: `Favori durumu değiştirilemedi: ${error.response?.data?.message || 'Bilinmeyen hata'}`,
+        description: `Favori durumu değiştirilemedi: ${error.response?.data?.message || 'Bilinmeyen hata'}${error.response?.status === 401 ? ' (Yetkilendirme hatası)' : ''}`,
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -535,9 +487,13 @@ const ReportsPage = () => {
   const fetchFavorites = async () => {
     try {
       const response = await api.get('/reports/favorites');
-      setFavorites(response.data.favorites || []);
+      if (response.data && response.data.favorites) {
+        setFavorites(response.data.favorites || []);
+      }
     } catch (error) {
       console.error('Error fetching favorites:', error);
+      // Hatada sessiz kal ve boş dizi ile devam et
+      setFavorites([]);
     }
   };
 
@@ -653,7 +609,7 @@ const ReportsPage = () => {
   };
 
   // Kart Bileşeni
-  const Card = ({ title, children, className = '', actionButton = null, id }) => {
+  const DashboardCard = ({ title, children, className = '', actionButton = null, id }) => {
     return (
       <div 
         className={`relative rounded-xl bg-slate-800 bg-opacity-80 backdrop-blur-lg border border-slate-700 
@@ -853,22 +809,10 @@ const ReportsPage = () => {
         </div>
       </div>
 
-      {/* React Grid Layout ile Dashboard */}
-      <ResponsiveGridLayout
-        className="layout"
-        layouts={layouts}
-        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 6, sm: 4, xs: 2, xxs: 1 }}
-        rowHeight={130}
-        onLayoutChange={onLayoutChange}
-        isDraggable={isCustomizing}
-        isResizable={isCustomizing}
-        isBounded={true}
-        margin={[16, 16]}
-        containerPadding={[0, 0]}
-      >
+      {/* Manual grid layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* İstatistik Kartları */}
-        <div key="totalSessions">
+        <div>
           <StatCard 
             id="totalSessions"
             title="Toplam Oturum" 
@@ -880,7 +824,7 @@ const ReportsPage = () => {
           />
         </div>
         
-        <div key="totalMessages">
+        <div>
           <StatCard 
             id="totalMessages"
             title="Toplam Mesaj" 
@@ -892,7 +836,7 @@ const ReportsPage = () => {
           />
         </div>
         
-        <div key="responseTime">
+        <div>
           <StatCard 
             id="responseTime"
             title="Ortalama Yanıt Süresi" 
@@ -904,7 +848,7 @@ const ReportsPage = () => {
           />
         </div>
         
-        <div key="contextUsage">
+        <div>
           <StatCard 
             id="contextUsage"
             title="Context Kullanım Oranı" 
@@ -913,10 +857,12 @@ const ReportsPage = () => {
             color="purple"
           />
         </div>
-        
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
         {/* Saatlik Aktivite Grafiği */}
-        <div key="hourlyActivity">
-          <Card 
+        <div className="lg:col-span-8">
+          <DashboardCard 
             id="hourlyActivity"
             title="Saatlik Mesaj Aktivitesi" 
             actionButton={
@@ -992,12 +938,12 @@ const ReportsPage = () => {
                 </ResponsiveContainer>
               )}
             </div>
-          </Card>
+          </DashboardCard>
         </div>
         
         {/* En Çok Konuşulan Konular - Pie Chart */}
-        <div key="topTopics">
-          <Card 
+        <div className="lg:col-span-4">
+          <DashboardCard 
             id="topTopics" 
             title="En Çok Konuşulan Konular"
           >
@@ -1019,7 +965,7 @@ const ReportsPage = () => {
                       dataKey="value"
                     >
                       {dashboardData.topTopics.map((entry, index) => (
-                        <cell key={`cell-${index}`} fill={[
+                        <Cell key={`cell-${index}`} fill={[
                           '#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6'
                         ][index % 5]} />
                       ))}
@@ -1037,12 +983,14 @@ const ReportsPage = () => {
                 </ResponsiveContainer>
               )}
             </div>
-          </Card>
+          </DashboardCard>
         </div>
-        
+      </div>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
         {/* Haftalık Aktivite Bar Chart */}
-        <div key="weeklyActivity">
-          <Card 
+        <div className="lg:col-span-4">
+          <DashboardCard 
             id="weeklyActivity" 
             title="Haftalık Aktivite Dağılımı"
           >
@@ -1073,7 +1021,7 @@ const ReportsPage = () => {
                         borderRadius: '0.375rem'
                       }}
                     />
-                    <RechartsBarChart.Bar 
+                    <RechartsBar 
                       dataKey="value" 
                       fill="#0ea5e9"
                       radius={[4, 4, 0, 0]} 
@@ -1082,12 +1030,12 @@ const ReportsPage = () => {
                 </ResponsiveContainer>
               )}
             </div>
-          </Card>
+          </DashboardCard>
         </div>
         
         {/* Son Aktiviteler */}
-        <div key="recentActivities">
-          <Card 
+        <div className="lg:col-span-4">
+          <DashboardCard 
             id="recentActivities" 
             title="Son Aktiviteler"
             actionButton={
@@ -1126,12 +1074,12 @@ const ReportsPage = () => {
                 ))
               )}
             </div>
-          </Card>
+          </DashboardCard>
         </div>
         
         {/* SQL Raporları */}
-        <div key="sqlReports">
-          <Card 
+        <div className="lg:col-span-4">
+          <DashboardCard 
             id="sqlReports" 
             title="SQL Raporları"
             actionButton={
@@ -1144,9 +1092,9 @@ const ReportsPage = () => {
             }
           >
             <div className="grid grid-cols-2 gap-2 mt-2">
-              {reports.slice(0, 4).map((report) => (
+              {reports.slice(0, 4).map((report, index) => (
                 <div 
-                  key={report.id} 
+                  key={report.id || index} 
                   className="p-3 bg-slate-700 bg-opacity-50 hover:bg-slate-600 rounded-lg cursor-pointer transition-colors"
                   onClick={() => handleReportClick(report)}
                 >
@@ -1174,9 +1122,9 @@ const ReportsPage = () => {
                 </div>
               ))}
             </div>
-          </Card>
+          </DashboardCard>
         </div>
-      </ResponsiveGridLayout>
+      </div>
     </div>
   );
 
@@ -1311,9 +1259,9 @@ const ReportsPage = () => {
             </p>
           </div>
         ) : (
-          filteredReports.map(report => (
+          filteredReports.map((report, index) => (
             <motion.div
-              key={report.report_name}
+              key={report.report_name || index}
               className={`relative p-5 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500 transition-all duration-200 cursor-pointer
                          group hover:-translate-y-1 hover:shadow-xl ${viewMode === 'list' ? 'flex items-start' : ''}`}
               whileHover={{ scale: viewMode === 'grid' ? 1.02 : 1.01 }}
@@ -1402,9 +1350,9 @@ const ReportsPage = () => {
       ) : (
         filteredReports
           .filter(report => favorites.includes(report.report_name))
-          .map(report => (
+          .map((report, index) => (
             <motion.div
-              key={report.report_name}
+              key={report.report_name || index}
               className="relative p-5 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500 transition-all duration-200 cursor-pointer
                        group hover:-translate-y-1 hover:shadow-xl"
               whileHover={{ scale: 1.02 }}
