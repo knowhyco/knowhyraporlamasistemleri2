@@ -70,6 +70,7 @@ import {
   ModalCloseButton,
   ButtonGroup,
   Progress,
+  ModalFooter,
 } from '@chakra-ui/react';
 import { 
   SearchIcon,
@@ -203,6 +204,111 @@ const FilterIcon = () => (
   </Icon>
 );
 
+// StatCard bileşenini modern bir tasarımla güncelliyorum
+const StatCard = ({ id, title, value, description, icon, color, trend, trendDirection }) => {
+  // Renk şemaları
+  const colorScheme = {
+    blue: {
+      bg: 'from-blue-900/30 to-blue-800/30',
+      accentBg: 'bg-blue-600',
+      iconBg: 'bg-blue-500/10',
+      borderAccent: 'border-blue-500/20',
+      text: 'text-blue-500',
+    },
+    green: {
+      bg: 'from-green-900/30 to-green-800/30',
+      accentBg: 'bg-green-600',
+      iconBg: 'bg-green-500/10',
+      borderAccent: 'border-green-500/20',
+      text: 'text-green-500',
+    },
+    purple: {
+      bg: 'from-purple-900/30 to-purple-800/30',
+      accentBg: 'bg-purple-600',
+      iconBg: 'bg-purple-500/10',
+      borderAccent: 'border-purple-500/20',
+      text: 'text-purple-500',
+    },
+    yellow: {
+      bg: 'from-amber-900/30 to-amber-800/30',
+      accentBg: 'bg-amber-600',
+      iconBg: 'bg-amber-500/10',
+      borderAccent: 'border-amber-500/20',
+      text: 'text-amber-500',
+    },
+    red: {
+      bg: 'from-red-900/30 to-red-800/30',
+      accentBg: 'bg-red-600',
+      iconBg: 'bg-red-500/10',
+      borderAccent: 'border-red-500/20',
+      text: 'text-red-500',
+    }
+  };
+  
+  const scheme = colorScheme[color] || colorScheme.blue;
+
+  return (
+    <div 
+      id={id}
+      className={`bg-gradient-to-br ${scheme.bg} rounded-xl border border-slate-700 ${scheme.borderAccent} shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden p-5`}
+    >
+      <div className="flex justify-between">
+        <div>
+          <p className="text-gray-400 text-sm mb-1">{title}</p>
+          <h3 className="text-white text-2xl font-bold">{value}</h3>
+          {description && <p className="text-gray-400 text-xs mt-1">{description}</p>}
+          
+          {trend !== undefined && (
+            <div className={`flex items-center mt-3 ${trendDirection > 0 ? 'text-green-400' : trendDirection < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+              {trendDirection > 0 ? (
+                <ArrowUpIcon className="h-3 w-3 mr-1" />
+              ) : trendDirection < 0 ? (
+                <ArrowDownIcon className="h-3 w-3 mr-1" />
+              ) : null}
+              <span className="text-xs font-medium">
+                {trend}% {trendDirection > 0 ? 'artış' : trendDirection < 0 ? 'azalış' : ''}
+              </span>
+            </div>
+          )}
+        </div>
+        
+        <div className={`${scheme.iconBg} rounded-full p-3 h-12 w-12 flex items-center justify-center ${scheme.text}`}>
+          {icon}
+        </div>
+      </div>
+      
+      {/* Alt kısımdaki dekoratif çizgi */}
+      <div className="mt-4 -mx-5 -mb-5">
+        <div className={`${scheme.accentBg} h-1.5 rounded-t-full opacity-30`}></div>
+      </div>
+    </div>
+  );
+};
+
+// DashboardCard bileşenini güncelliyorum
+const DashboardCard = ({ id, title, children, actionButton, className = '' }) => {
+  return (
+    <div 
+      id={id} 
+      className={`bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border border-slate-700 shadow-xl overflow-hidden h-full ${className}`}
+    >
+      <div className="bg-slate-800/50 px-5 py-4 border-b border-slate-700/30 flex justify-between items-center">
+        <h3 className="font-medium text-white flex items-center">
+          {title}
+        </h3>
+        {actionButton && (
+          <div>
+            {actionButton}
+          </div>
+        )}
+      </div>
+      <div className="p-5">
+        {children}
+      </div>
+    </div>
+  );
+};
+
 const ReportsPage = () => {
   const toast = useToast();
   const navigate = useNavigate();
@@ -224,6 +330,7 @@ const ReportsPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalPosition, setModalPosition] = useState({ top: 0, left: 0 });
   const [isCustomizing, setIsCustomizing] = useState(false);
+  const [reportFilter, setReportFilter] = useState('all');
   const [dashboardData, setDashboardData] = useState({
     totalSessions: 0,
     totalMessages: 0,
@@ -557,135 +664,6 @@ const ReportsPage = () => {
     setIsCustomizing(!isCustomizing);
   };
 
-  // İstatistik Kartı Bileşeni
-  const StatCard = ({ title, value, icon, trend, trendDirection, color, id }) => {
-    return (
-      <div 
-        className={`relative p-5 rounded-xl bg-opacity-80 backdrop-blur-lg border border-slate-700 transition-all duration-200 h-full
-                   bg-slate-800 hover:bg-slate-700 hover:-translate-y-1 hover:shadow-xl
-                   ${isCustomizing ? 'cursor-move' : 'cursor-default'}`} 
-        id={id}
-      >
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-sm text-gray-400 mb-1">{title}</div>
-            <div className="text-2xl font-bold text-white">{value}</div>
-            
-            {trend && (
-              <div className={`inline-flex items-center px-2 py-0.5 mt-2 rounded-full text-xs font-medium
-                             ${trendDirection > 0 
-                               ? 'bg-green-900 bg-opacity-40 text-green-400' 
-                               : 'bg-red-900 bg-opacity-40 text-red-400'}`}>
-                {trendDirection > 0 ? (
-                  <ArrowUpIcon className="w-3 h-3 mr-1" />
-                ) : (
-                  <ArrowDownIcon className="w-3 h-3 mr-1" />
-                )}
-                {Math.abs(trend)}% {trendDirection > 0 ? 'artış' : 'azalış'}
-              </div>
-            )}
-          </div>
-          
-          <div className={`flex items-center justify-center w-10 h-10 rounded-lg 
-                         ${color === 'blue' ? 'bg-blue-900 bg-opacity-30 text-blue-500' : 
-                           color === 'green' ? 'bg-green-900 bg-opacity-30 text-green-500' : 
-                           color === 'yellow' ? 'bg-yellow-900 bg-opacity-30 text-yellow-500' : 
-                           color === 'purple' ? 'bg-purple-900 bg-opacity-30 text-purple-500' : 
-                           'bg-slate-900 bg-opacity-30 text-slate-500'}`}>
-            {icon}
-          </div>
-        </div>
-        
-        {color === 'purple' && (
-          <div className="mt-3 w-full h-1.5 bg-slate-700 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-purple-500" 
-              style={{ width: `${dashboardData.contextUsage.percentage}%` }}
-            ></div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Kart Bileşeni
-  const DashboardCard = ({ title, children, className = '', actionButton = null, id }) => {
-    return (
-      <div 
-        className={`relative rounded-xl bg-slate-800 bg-opacity-80 backdrop-blur-lg border border-slate-700 
-                   overflow-hidden transition-all duration-200 h-full 
-                   ${isCustomizing ? 'cursor-move' : 'cursor-default'} ${className}`}
-        id={id}
-      >
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
-          <h3 className="text-md font-semibold text-white">{title}</h3>
-          {actionButton}
-        </div>
-        <div className="p-4">
-          {children}
-        </div>
-      </div>
-    );
-  };
-
-  // Rapor Detay Modalı
-  const ReportDetailModal = () => {
-    if (!selectedReport) return null;
-
-    return (
-      <div className={`fixed inset-0 z-50 flex items-center justify-center ${isModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-300`}>
-        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm" onClick={() => setIsModalOpen(false)}></div>
-        
-        <div className="relative bg-slate-800 w-full max-w-2xl rounded-xl overflow-hidden shadow-2xl">
-          <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-white">{selectedReport.display_name}</h3>
-            <button 
-              className="text-gray-400 hover:text-white"
-              onClick={() => setIsModalOpen(false)}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-          
-          <div className="px-6 py-4">
-            <p className="text-gray-300 mb-4">{selectedReport.description}</p>
-            
-            <div className="border-t border-slate-700 my-4 pt-4">
-              <h4 className="text-sm font-semibold text-white mb-2">Parametreler</h4>
-              
-              {selectedReport.parameters && Object.keys(selectedReport.parameters).length > 0 ? (
-                <div className="grid grid-cols-2 gap-4">
-                  {Object.entries(selectedReport.parameters).map(([key, value]) => (
-                    <div key={key}>
-                      <div className="text-sm font-medium text-white">{key}</div>
-                      <div className="text-sm text-gray-400">{value || 'Varsayılan'}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-400">Bu rapor parametre gerektirmez.</p>
-              )}
-            </div>
-          </div>
-          
-          <div className="px-6 py-4 bg-slate-900 flex justify-end">
-            <button
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-              onClick={() => {
-                setIsModalOpen(false);
-                handleReportClick(selectedReport);
-              }}
-            >
-              Raporu Görüntüle
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   // Ana dashboard gösterimi
   const renderDashboard = () => (
     <div className="relative">
@@ -713,104 +691,203 @@ const ReportsPage = () => {
         </div>
       )}
 
-      {/* Dashboard Başlık */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white mb-1">
-            Knowhy Raporlama Sistemi
-          </h1>
-          <p className="text-sm text-gray-400">
-            Son güncelleme: {new Date().toLocaleString('tr-TR')}
-          </p>
-        </div>
-        <div className="flex space-x-2">
-          <div className="relative">
-            <button
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm rounded-lg border border-slate-700 flex items-center space-x-1"
-              onClick={() => document.getElementById('timeRangeDropdown').classList.toggle('hidden')}
-            >
-              <span>
-                {timeRange === '24h' && 'Son 24 Saat'}
-                {timeRange === '7d' && 'Son 7 Gün'}
-                {timeRange === '30d' && 'Son 30 Gün'}
-                {timeRange === 'custom' && 'Özel Aralık'}
-              </span>
-              <ChevronDownIcon className="w-4 h-4" />
-            </button>
+      {/* Modern Dashboard Header */}
+      <div className="mb-6">
+        {/* Üst Bilgi Kartı */}
+        <div className="bg-gradient-to-r from-blue-900 to-slate-800 rounded-xl shadow-lg overflow-hidden">
+          {/* Üst Kısım - Logo ve Başlık */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 border-b border-slate-700/30">
+            <div className="flex items-center mb-4 md:mb-0">
+              <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xl mr-3">
+                K
+              </div>
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold text-white mb-1">
+                  Knowhy Raporlama Sistemi
+                </h1>
+                <div className="flex items-center text-blue-200 text-xs md:text-sm">
+                  <span className="flex items-center mr-4">
+                    <ClockIcon className="w-4 h-4 mr-1" />
+                    Son Güncelleme: {new Date().toLocaleString('tr-TR')}
+                  </span>
+                  
+                  <span className="flex items-center">
+                    <InformationCircleIcon className="w-4 h-4 mr-1" />
+                    <span className="hidden md:inline">Aktif Oturum Sayısı:</span> 
+                    <span className="ml-1 font-medium">{dashboardData.activeSessions || 0}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
             
-            <div id="timeRangeDropdown" className="absolute right-0 mt-1 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
-              <ul className="py-1">
-                <li>
-                  <button 
-                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
-                    onClick={() => {
-                      setTimeRange('24h');
-                      document.getElementById('timeRangeDropdown').classList.add('hidden');
-                    }}
-                  >
-                    Son 24 Saat
-                  </button>
-                </li>
-                <li>
-                  <button 
-                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
-                    onClick={() => {
-                      setTimeRange('7d');
-                      document.getElementById('timeRangeDropdown').classList.add('hidden');
-                    }}
-                  >
-                    Son 7 Gün
-                  </button>
-                </li>
-                <li>
-                  <button 
-                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
-                    onClick={() => {
-                      setTimeRange('30d');
-                      document.getElementById('timeRangeDropdown').classList.add('hidden');
-                    }}
-                  >
-                    Son 30 Gün
-                  </button>
-                </li>
-                <li>
-                  <button 
-                    className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left"
-                    onClick={() => {
-                      setTimeRange('custom');
-                      document.getElementById('timeRangeDropdown').classList.add('hidden');
-                    }}
-                  >
-                    Özel Aralık
-                  </button>
-                </li>
-              </ul>
+            <div className="flex flex-wrap md:flex-nowrap items-center gap-2 w-full md:w-auto">
+              {/* Arama Kutusu */}
+              <div className="relative w-full md:w-auto">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <MagnifyingGlassIcon className="h-4 w-4 text-blue-300" />
+                </div>
+                <input
+                  type="text"
+                  className="bg-slate-800/50 border border-slate-600/50 rounded-lg pl-10 pr-3 py-2 text-sm text-white w-full md:w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Rapor Ara..."
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              {/* Hızlı Filtreler */}
+              <div className="flex space-x-1">
+                <button 
+                  className={`px-3 py-2 text-xs rounded-lg border border-slate-600/50 ${timeRange === '24h' ? 'bg-blue-700' : 'bg-slate-800/50 hover:bg-slate-700/50'} text-white transition-colors`}
+                  onClick={() => setTimeRange('24h')}
+                >
+                  24s
+                </button>
+                <button 
+                  className={`px-3 py-2 text-xs rounded-lg border border-slate-600/50 ${timeRange === '7d' ? 'bg-blue-700' : 'bg-slate-800/50 hover:bg-slate-700/50'} text-white transition-colors`}
+                  onClick={() => setTimeRange('7d')}
+                >
+                  7g
+                </button>
+                <button 
+                  className={`px-3 py-2 text-xs rounded-lg border border-slate-600/50 ${timeRange === '30d' ? 'bg-blue-700' : 'bg-slate-800/50 hover:bg-slate-700/50'} text-white transition-colors`}
+                  onClick={() => setTimeRange('30d')}
+                >
+                  30g
+                </button>
+                <button
+                  className={`px-3 py-2 text-xs rounded-lg border border-slate-600/50 ${timeRange === 'custom' ? 'bg-blue-700' : 'bg-slate-800/50 hover:bg-slate-700/50'} text-white transition-colors`}
+                  onClick={() => document.getElementById('customRangeModal').classList.toggle('hidden')}
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
           
-          <button
-            className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg flex items-center space-x-1"
-            onClick={() => {
-              setLoading(true);
-              fetchDashboardData();
-            }}
-          >
-            <ArrowPathIcon className="w-4 h-4" />
-            <span>Yenile</span>
-          </button>
-          
-          <button
-            className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-lg flex items-center space-x-1"
-            onClick={toggleCustomizeMode}
-          >
-            <CogIcon className="w-4 h-4" />
-            <span>Özelleştir</span>
-          </button>
+          {/* Alt Kısım - İstatistikler ve Aksiyon Butonları */}
+          <div className="p-3 bg-slate-800/30 flex flex-col md:flex-row justify-between">
+            {/* Mini Stat Kartları */}
+            <div className="flex flex-wrap gap-2 mb-3 md:mb-0">
+              <div className="px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <div className="text-xs text-gray-400">Toplam Oturum</div>
+                <div className="text-sm font-semibold text-white flex items-center">
+                  {dashboardData.totalSessions.toLocaleString()}
+                  {dashboardData.sessionTrend !== 0 && (
+                    <span className={`ml-2 text-xs ${dashboardData.sessionTrend > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {dashboardData.sessionTrend > 0 ? '+' : ''}{dashboardData.sessionTrend}%
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <div className="text-xs text-gray-400">Toplam Mesaj</div>
+                <div className="text-sm font-semibold text-white flex items-center">
+                  {dashboardData.totalMessages.toLocaleString()}
+                  {dashboardData.messageTrend !== 0 && (
+                    <span className={`ml-2 text-xs ${dashboardData.messageTrend > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {dashboardData.messageTrend > 0 ? '+' : ''}{dashboardData.messageTrend}%
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="px-3 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                <div className="text-xs text-gray-400">Ort. Yanıt Süresi</div>
+                <div className="text-sm font-semibold text-white">
+                  {dashboardData.avgResponseTime.toFixed(1)}s
+                </div>
+              </div>
+            </div>
+            
+            {/* Aksiyon Butonları */}
+            <div className="flex items-center space-x-2">
+              <div className="relative mr-2">
+                <button
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                  className={`flex items-center px-3 py-2 rounded-lg text-white text-sm ${
+                    autoRefresh ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-700 hover:bg-slate-600'
+                  } transition-colors`}
+                >
+                  <ArrowPathIcon className={`h-4 w-4 mr-1 ${autoRefresh ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">Otomatik</span>
+                </button>
+              </div>
+              
+              <button
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center text-sm transition-colors"
+                onClick={() => {
+                  setLoading(true);
+                  fetchDashboardData();
+                }}
+              >
+                <ArrowPathIcon className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Yenile</span>
+              </button>
+              
+              <button
+                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center text-sm transition-colors"
+                onClick={toggleCustomizeMode}
+              >
+                <CogIcon className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">Özelleştir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Tarih Aralığı Özel Seçim Modal */}
+        <div 
+          id="customRangeModal" 
+          className="hidden fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target.id === 'customRangeModal') {
+              document.getElementById('customRangeModal').classList.add('hidden');
+            }
+          }}
+        >
+          <div className="bg-slate-800 p-5 rounded-xl shadow-lg w-80">
+            <h3 className="text-lg font-semibold text-white mb-4">Özel Tarih Aralığı</h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm text-gray-300 mb-2">Başlangıç Tarihi</label>
+              <input 
+                type="date" 
+                className="w-full bg-slate-700 border border-slate-600 rounded p-2 text-white"
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm text-gray-300 mb-2">Bitiş Tarihi</label>
+              <input 
+                type="date" 
+                className="w-full bg-slate-700 border border-slate-600 rounded p-2 text-white"
+              />
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <button 
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded"
+                onClick={() => document.getElementById('customRangeModal').classList.add('hidden')}
+              >
+                İptal
+              </button>
+              <button 
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+                onClick={() => {
+                  setTimeRange('custom');
+                  document.getElementById('customRangeModal').classList.add('hidden');
+                }}
+              >
+                Uygula
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Manual grid layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Dashboard İçeriği - İstatistik Kartları ve Diğer Bileşenler */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* İstatistik Kartları */}
         <div>
           <StatCard 
@@ -858,44 +935,23 @@ const ReportsPage = () => {
           />
         </div>
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
-        {/* Saatlik Aktivite Grafiği */}
-        <div className="lg:col-span-8">
+      
+      {/* Grafikler Satırı */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
+        {/* Saatlik Aktivite - 2/3 genişlikte */}
+        <div className="lg:col-span-2">
           <DashboardCard 
-            id="hourlyActivity"
-            title="Saatlik Mesaj Aktivitesi" 
+            id="hourlyActivity" 
+            title="Saatlik Aktivite"
             actionButton={
-              <div className="relative">
-                <button
-                  className="text-gray-400 hover:text-white"
-                  onClick={() => document.getElementById('hourlyDropdown').classList.toggle('hidden')}
-                >
-                  <CogIcon className="w-5 h-5" />
-                </button>
-                
-                <div id="hourlyDropdown" className="absolute right-0 mt-1 w-40 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
-                  <ul className="py-1">
-                    <li>
-                      <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left flex items-center">
-                        <ArrowDownTrayIcon className="w-4 h-4 mr-2" />
-                        CSV olarak indir
-                      </button>
-                    </li>
-                    <li>
-                      <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left flex items-center">
-                        <ArrowPathIcon className="w-4 h-4 mr-2" />
-                        Yenile
-                      </button>
-                    </li>
-                  </ul>
-                </div>
-              </div>
+              <Tooltip label="Son 24 saatteki mesaj dağılımı" placement="top">
+                <InfoIcon className="h-4 w-4 text-gray-400 hover:text-white cursor-pointer transition-colors" />
+              </Tooltip>
             }
           >
             <div className="h-[260px] w-full">
               {loading ? (
-                <div className="animate-pulse h-full w-full bg-slate-700"></div>
+                <div className="animate-pulse h-full w-full bg-slate-700/50 rounded-lg"></div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart
@@ -903,12 +959,12 @@ const ReportsPage = () => {
                     margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                   >
                     <defs>
-                      <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                      <linearGradient id="colorMessages" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
                         <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
                     <XAxis 
                       dataKey="hour" 
                       tick={{ fill: '#9ca3af' }} 
@@ -925,14 +981,13 @@ const ReportsPage = () => {
                         color: '#f9fafb',
                         borderRadius: '0.375rem'
                       }}
-                      labelStyle={{ color: '#f9fafb', fontWeight: 'bold' }}
                     />
                     <Area 
                       type="monotone" 
                       dataKey="value" 
                       stroke="#3b82f6" 
                       fillOpacity={1} 
-                      fill="url(#colorValue)" 
+                      fill="url(#colorMessages)" 
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -941,35 +996,41 @@ const ReportsPage = () => {
           </DashboardCard>
         </div>
         
-        {/* En Çok Konuşulan Konular - Pie Chart */}
-        <div className="lg:col-span-4">
+        {/* Top Konular - 1/3 genişlikte */}
+        <div className="lg:col-span-1">
           <DashboardCard 
             id="topTopics" 
-            title="En Çok Konuşulan Konular"
+            title="En Çok İşlenen Konular"
+            actionButton={
+              <Tooltip label="Son 7 gün içindeki en popüler konular" placement="top">
+                <InfoIcon className="h-4 w-4 text-gray-400 hover:text-white cursor-pointer transition-colors" />
+              </Tooltip>
+            }
           >
             <div className="h-[260px] w-full">
               {loading ? (
-                <div className="animate-pulse h-full w-full bg-slate-700"></div>
+                <div className="animate-pulse h-full w-full bg-slate-700/50 rounded-lg"></div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <PieRecharts
+                    <Pie
                       data={dashboardData.topTopics}
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                       outerRadius={80}
-                      innerRadius={50}
+                      innerRadius={40}
                       fill="#8884d8"
                       dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                     >
                       {dashboardData.topTopics.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={[
-                          '#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6'
+                          '#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444'
                         ][index % 5]} />
                       ))}
-                    </PieRecharts>
+                    </Pie>
                     <Tooltip 
                       contentStyle={{ 
                         backgroundColor: '#1f2937', 
@@ -977,7 +1038,7 @@ const ReportsPage = () => {
                         color: '#f9fafb',
                         borderRadius: '0.375rem'
                       }}
-                      formatter={(value, name, props) => [`${value} mesaj`, props.payload.name]}
+                      formatter={(value) => [`${value} mesaj`, 'Toplam']}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -987,16 +1048,22 @@ const ReportsPage = () => {
         </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
-        {/* Haftalık Aktivite Bar Chart */}
-        <div className="lg:col-span-4">
+      {/* Alt Satır - 3 Kart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
+        {/* Haftalık Aktivite */}
+        <div>
           <DashboardCard 
             id="weeklyActivity" 
-            title="Haftalık Aktivite Dağılımı"
+            title="Haftalık Aktivite"
+            actionButton={
+              <Tooltip label="Haftanın günlerine göre mesaj dağılımı" placement="top">
+                <InfoIcon className="h-4 w-4 text-gray-400 hover:text-white cursor-pointer transition-colors" />
+              </Tooltip>
+            }
           >
             <div className="h-[260px] w-full">
               {loading ? (
-                <div className="animate-pulse h-full w-full bg-slate-700"></div>
+                <div className="animate-pulse h-full w-full bg-slate-700/50 rounded-lg"></div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsBarChart
@@ -1023,7 +1090,7 @@ const ReportsPage = () => {
                     />
                     <RechartsBar 
                       dataKey="value" 
-                      fill="#0ea5e9"
+                      fill="#10b981"
                       radius={[4, 4, 0, 0]} 
                     />
                   </RechartsBarChart>
@@ -1034,93 +1101,127 @@ const ReportsPage = () => {
         </div>
         
         {/* Son Aktiviteler */}
-        <div className="lg:col-span-4">
+        <div>
           <DashboardCard 
             id="recentActivities" 
             title="Son Aktiviteler"
             actionButton={
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
-                Canlı
-              </span>
+              <Badge colorScheme="blue" fontSize="xs" rounded="full" px="2">Canlı</Badge>
             }
             className="overflow-hidden"
           >
-            <div className="overflow-y-auto max-h-[550px] -mx-4 px-4">
+            <div className="overflow-y-auto max-h-[260px] pr-1 -mr-1">
               {loading ? (
-                Array(5).fill(0).map((_, index) => (
-                  <div key={index} className="animate-pulse mb-4">
-                    <div className="h-20 bg-slate-700 rounded-lg"></div>
-                  </div>
-                ))
-              ) : (
-                dashboardData.recentActivities.map((activity, index) => (
-                  <div 
-                    key={index} 
-                    className="p-3 mb-3 bg-slate-700 bg-opacity-50 hover:bg-opacity-70 rounded-lg flex items-center transition-colors"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-blue-900 bg-opacity-40 flex items-center justify-center mr-4 text-blue-400">
-                      <ChatBubbleLeftRightIcon className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-white">{activity.session_id}</div>
-                      <div className="text-xs text-gray-400">
-                        {activity.message_count} mesaj • {activity.session_duration}
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="animate-pulse flex items-center p-2">
+                      <div className="rounded-full bg-slate-700 h-8 w-8"></div>
+                      <div className="ml-4 flex-1">
+                        <div className="h-4 bg-slate-700 rounded w-3/4 mb-2"></div>
+                        <div className="h-3 bg-slate-700 rounded w-1/2"></div>
                       </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {new Date(activity.last_message).toLocaleTimeString('tr-TR')}
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {dashboardData.recentActivities.map((activity, index) => (
+                    <div 
+                      key={activity.id || index}
+                      className="p-2 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="rounded-full bg-blue-600/30 border border-blue-500/30 h-8 w-8 flex items-center justify-center">
+                            <ChatIcon className="h-4 w-4 text-blue-400" />
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-white">{activity.session_id}</p>
+                            <p className="text-xs text-gray-400">
+                              {activity.message_count} mesaj • {activity.session_duration}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {new Date(activity.last_message).toLocaleTimeString('tr-TR', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
           </DashboardCard>
         </div>
         
         {/* SQL Raporları */}
-        <div className="lg:col-span-4">
+        <div>
           <DashboardCard 
             id="sqlReports" 
             title="SQL Raporları"
             actionButton={
-              <button 
-                className="text-xs font-medium px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-white transition-colors"
+              <Button 
+                size="xs" 
+                colorScheme="blue" 
+                variant="ghost"
                 onClick={() => setSelectedTab(1)}
               >
-                Tüm Raporlar
-              </button>
+                Tümü
+              </Button>
             }
           >
-            <div className="grid grid-cols-2 gap-2 mt-2">
-              {reports.slice(0, 4).map((report, index) => (
-                <div 
-                  key={report.id || index} 
-                  className="p-3 bg-slate-700 bg-opacity-50 hover:bg-slate-600 rounded-lg cursor-pointer transition-colors"
-                  onClick={() => handleReportClick(report)}
-                >
-                  <div className="flex items-start justify-between">
-                    <h4 className="text-sm font-medium text-white line-clamp-1">{report.name}</h4>
-                    <button
-                      className="text-gray-400 hover:text-yellow-400"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleFavorite(report);
-                      }}
-                    >
-                      {favorites.includes(report.id) 
-                        ? <StarIconSolid className="w-4 h-4 text-yellow-400" />
-                        : <StarIcon className="w-4 h-4" />
-                      }
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1 line-clamp-2">
-                    {report.description || "Bu rapor için açıklama bulunmamaktadır."}
-                  </p>
-                  <span className="inline-block mt-2 text-xs px-2 py-0.5 bg-blue-900 text-blue-300 rounded-full">
-                    {report.category || 'Genel'}
-                  </span>
+            <div className="overflow-y-auto max-h-[260px] pr-1 -mr-1">
+              {loading ? (
+                <div className="space-y-3">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="animate-pulse p-2">
+                      <div className="h-5 bg-slate-700 rounded w-3/4 mb-2"></div>
+                      <div className="h-3 bg-slate-700 rounded-sm w-1/2"></div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-2">
+                  {reports.slice(0, 5).map((report, index) => (
+                    <div 
+                      key={report.id || index}
+                      className="p-2 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer flex justify-between items-center"
+                      onClick={() => handleReportClick(report)}
+                    >
+                      <div>
+                        <div className="flex items-center">
+                          <ArrowDownTrayIcon className="h-3.5 w-3.5 text-blue-400 mr-2" />
+                          <p className="text-sm text-white font-medium truncate">
+                            {report.display_name}
+                          </p>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1 ml-5.5 truncate max-w-[180px]">
+                          {report.description || 'Açıklama yok'}
+                        </p>
+                      </div>
+                      <IconButton
+                        icon={report.is_favorite ? <StarIcon /> : <StarIcon />}
+                        aria-label="Favori Ekle/Çıkar"
+                        size="xs"
+                        colorScheme={report.is_favorite ? "yellow" : "gray"}
+                        variant="ghost"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleFavorite(report);
+                        }}
+                      />
+                    </div>
+                  ))}
+                  {reports.length === 0 && (
+                    <div className="text-center p-6">
+                      <p className="text-gray-400 text-sm">Henüz rapor bulunmuyor.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </DashboardCard>
         </div>
@@ -1128,338 +1229,563 @@ const ReportsPage = () => {
     </div>
   );
 
-  // Rapor listesi render ediliyor
-  const renderReportList = () => (
-    <div>
-      {/* Filtre ve arama bar */}
-      <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 mb-6 shadow-lg">
-        <div className="grid grid-cols-12 gap-4">
-          <div className="col-span-12 md:col-span-5">
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                className="block w-full pl-10 pr-3 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Rapor ara..."
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-          
-          <div className="col-span-6 md:col-span-3">
-            <div className="relative">
-              <button
-                className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white flex items-center justify-between"
-                onClick={() => document.getElementById('categoryDropdown').classList.toggle('hidden')}
+  // Rapor Detay Modalı güncellemesi
+  const ReportDetailModal = () => {
+    if (!selectedReport) return null;
+
+    return (
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} isCentered size="xl">
+        <ModalOverlay backdropFilter="blur(4px)" backgroundColor="rgba(0, 0, 0, 0.7)" />
+        <ModalContent bg="gray.800" borderColor="gray.700" borderWidth="1px" rounded="xl" boxShadow="xl">
+          <ModalHeader borderBottomWidth="1px" borderColor="gray.700" pb={4}>
+            <Flex alignItems="center">
+              <Box 
+                rounded="md" 
+                bg="blue.600" 
+                color="white" 
+                p={2}
+                mr={3}
+                boxShadow="md"
               >
-                <span>Kategori</span>
-                <ChevronDownIcon className="h-5 w-5 text-gray-400" />
-              </button>
+                <ArrowDownTrayIcon className="h-5 w-5" />
+              </Box>
+              <Text>{selectedReport.display_name}</Text>
+            </Flex>
+          </ModalHeader>
+          <ModalCloseButton color="gray.400" _hover={{ color: "white" }} />
+          
+          <ModalBody py={6}>
+            <Text color="gray.300" mb={4}>{selectedReport.description || "Bu rapor için açıklama bulunmamaktadır."}</Text>
+            
+            <Box borderTopWidth="1px" borderColor="gray.700" pt={4} mt={4}>
+              <Heading as="h4" size="sm" mb={3}>Rapor Detayları</Heading>
               
-              <div id="categoryDropdown" className="absolute left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
-                <ul className="py-1">
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      Tüm Kategoriler
-                    </button>
-                  </li>
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      Zaman Bazlı Analizler
-                    </button>
-                  </li>
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      İçerik Analizleri
-                    </button>
-                  </li>
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      Performans Metrikleri
-                    </button>
-                  </li>
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      Detaylı Görünümler
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-          
-          <div className="col-span-6 md:col-span-2">
-            <div className="relative">
-              <button
-                className="w-full px-4 py-2.5 bg-slate-700 border border-slate-600 rounded-lg text-white flex items-center justify-between"
-                onClick={() => document.getElementById('sortDropdown').classList.toggle('hidden')}
-              >
-                <span>Sırala</span>
-                <ChevronDownIcon className="h-5 w-5 text-gray-400" />
-              </button>
+              <Grid templateColumns="repeat(2, 1fr)" gap={4}>
+                <Box>
+                  <Text fontSize="sm" fontWeight="medium" color="gray.300">Kategori</Text>
+                  <Badge colorScheme="blue" mt={1}>
+                    {selectedReport.category || 'Genel'}
+                  </Badge>
+                </Box>
+                
+                <Box>
+                  <Text fontSize="sm" fontWeight="medium" color="gray.300">Oluşturulma Tarihi</Text>
+                  <Text fontSize="sm" color="gray.400">
+                    {selectedReport.created_at 
+                      ? new Date(selectedReport.created_at).toLocaleDateString('tr-TR')
+                      : 'Belirtilmemiş'
+                    }
+                  </Text>
+                </Box>
+              </Grid>
+            </Box>
+            
+            <Box borderTopWidth="1px" borderColor="gray.700" pt={4} mt={4}>
+              <Heading as="h4" size="sm" mb={3}>Parametreler</Heading>
               
-              <div id="sortDropdown" className="absolute left-0 right-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-10 hidden">
-                <ul className="py-1">
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      İsme Göre (A-Z)
-                    </button>
-                  </li>
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      İsme Göre (Z-A)
-                    </button>
-                  </li>
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      En Sık Kullanılan
-                    </button>
-                  </li>
-                  <li>
-                    <button className="px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 w-full text-left">
-                      En Son Eklenen
-                    </button>
-                  </li>
-                </ul>
+              {selectedReport.parameters && Object.keys(selectedReport.parameters).length > 0 ? (
+                <Grid templateColumns="repeat(2, 1fr)" gap={4}>
+                  {Object.entries(selectedReport.parameters).map(([key, value]) => (
+                    <Box key={key} p={3} bg="gray.700" rounded="md">
+                      <Text fontSize="sm" fontWeight="medium" color="white">{key}</Text>
+                      <Text fontSize="sm" color="gray.400">{value || 'Varsayılan'}</Text>
+                    </Box>
+                  ))}
+                </Grid>
+              ) : (
+                <Alert status="info" variant="subtle" bg="blue.900" color="blue.100" rounded="md">
+                  <AlertIcon color="blue.200" />
+                  <Text fontSize="sm">Bu rapor parametre gerektirmez.</Text>
+                </Alert>
+              )}
+            </Box>
+          </ModalBody>
+          
+          <ModalFooter bg="gray.900" borderTopWidth="1px" borderColor="gray.700" rounded="0 0 xl xl">
+            <ButtonGroup spacing={3}>
+              <Button 
+                variant="ghost" 
+                colorScheme="gray" 
+                onClick={() => setIsModalOpen(false)}
+              >
+                İptal
+              </Button>
+              <Button 
+                colorScheme="blue" 
+                leftIcon={<ViewIcon />}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  handleReportClick(selectedReport);
+                }}
+              >
+                Raporu Görüntüle
+              </Button>
+            </ButtonGroup>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+    );
+  };
+
+  // Rapor Listesi görünümü güncelleniyor
+  const renderReportList = () => {
+    const renderSkeletons = () => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="bg-slate-800 rounded-xl p-5 animate-pulse border border-slate-700">
+            <div className="flex items-center mb-4">
+              <div className="h-10 w-10 bg-slate-700 rounded-md mr-3"></div>
+              <div className="flex-1">
+                <div className="h-5 bg-slate-700 rounded w-3/4 mb-2"></div>
+                <div className="h-3 bg-slate-700 rounded w-1/2"></div>
               </div>
             </div>
+            <div className="h-16 bg-slate-700 rounded mb-4"></div>
+            <div className="flex justify-between">
+              <div className="h-8 w-20 bg-slate-700 rounded"></div>
+              <div className="h-8 w-8 bg-slate-700 rounded-full"></div>
+            </div>
           </div>
-          
-          <div className="col-span-12 md:col-span-2">
-            <div className="flex rounded-lg overflow-hidden border border-slate-600">
-              <button
-                className={`flex-1 px-3 py-2.5 ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-gray-300 hover:bg-slate-600'}`}
-                onClick={() => setViewMode('grid')}
+        ))}
+      </div>
+    );
+
+    return (
+      <div>
+        {/* Arama ve Filtreler */}
+        <div className="bg-slate-800 rounded-xl p-4 mb-6 border border-slate-700 shadow-lg">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex-1">
+              <InputGroup>
+                <InputLeftElement pointerEvents="none">
+                  <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                </InputLeftElement>
+                <Input 
+                  placeholder="Rapor ara..." 
+                  bg="slate.900" 
+                  borderColor="slate.700"
+                  _hover={{ borderColor: "blue.500" }}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </InputGroup>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                size="sm" 
+                variant={reportFilter === 'all' ? 'solid' : 'outline'} 
+                colorScheme="blue" 
+                leftIcon={<ListBulletIcon className="h-4 w-4" />}
+                onClick={() => setReportFilter('all')}
               >
-                <Squares2X2Icon className="h-5 w-5 mx-auto" />
-              </button>
-              <button
-                className={`flex-1 px-3 py-2.5 ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-gray-300 hover:bg-slate-600'}`}
-                onClick={() => setViewMode('list')}
+                Tümü
+              </Button>
+              <Button 
+                size="sm" 
+                variant={reportFilter === 'favorites' ? 'solid' : 'outline'} 
+                colorScheme="yellow" 
+                leftIcon={<StarIcon className="h-4 w-4" />}
+                onClick={() => setReportFilter('favorites')}
               >
-                <ListBulletIcon className="h-5 w-5 mx-auto" />
-              </button>
+                Favoriler
+              </Button>
+              <Button 
+                size="sm" 
+                variant={reportFilter === 'recent' ? 'solid' : 'outline'} 
+                colorScheme="purple" 
+                leftIcon={<ClockIcon className="h-4 w-4" />}
+                onClick={() => setReportFilter('recent')}
+              >
+                Son Görüntülenenler
+              </Button>
             </div>
           </div>
         </div>
-      </div>
-      
-      {/* Rapor kartları grid */}
-      <div className={`grid ${viewMode === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'grid-cols-1 gap-4'}`}>
-        {filteredReports.length === 0 ? (
-          <div className="col-span-full py-12 flex flex-col items-center justify-center bg-slate-800 rounded-xl border border-slate-700">
-            <div className="p-4 bg-slate-700 rounded-full mb-4">
-              <InformationCircleIcon className="h-8 w-8 text-blue-400" />
-            </div>
-            <h3 className="text-lg font-medium text-white mb-2">Rapor bulunamadı</h3>
-            <p className="text-gray-400 text-center max-w-md">
-              Arama kriterlerinize uygun rapor bulunamadı. Lütfen başka bir arama terimi deneyin veya filtreleri sıfırlayın.
-            </p>
-          </div>
-        ) : (
-          filteredReports.map((report, index) => (
-            <motion.div
-              key={report.report_name || index}
-              className={`relative p-5 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500 transition-all duration-200 cursor-pointer
-                         group hover:-translate-y-1 hover:shadow-xl ${viewMode === 'list' ? 'flex items-start' : ''}`}
-              whileHover={{ scale: viewMode === 'grid' ? 1.02 : 1.01 }}
-              onClick={() => {
-                setSelectedReport(report);
-                setIsModalOpen(true);
-              }}
-            >
-              <div className={`${viewMode === 'list' ? 'flex-1' : ''}`}>
-                <div className="flex items-start justify-between">
-                  <h3 className={`font-semibold text-white ${viewMode === 'list' ? 'text-base' : 'text-lg mb-3'}`}>
-                    {report.display_name}
-                  </h3>
-                  <button
-                    className={`text-gray-400 hover:text-yellow-400 transition-colors ${viewMode === 'list' ? 'ml-2' : 'ml-4'}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleFavorite(report);
-                    }}
-                  >
-                    {favorites.includes(report.report_name) 
-                      ? <StarIconSolid className="h-5 w-5 text-yellow-400" />
-                      : <StarIcon className="h-5 w-5" />
-                    }
-                  </button>
-                </div>
-                
-                <p className={`text-gray-400 ${viewMode === 'list' ? 'text-sm line-clamp-1 mt-1' : 'mt-2 mb-4'}`}>
-                  {report.description || "Bu rapor için açıklama bulunmamaktadır."}
-                </p>
-                
-                <div className={`flex flex-wrap gap-2 ${viewMode === 'list' ? 'mt-2' : 'mt-4'}`}>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
-                    Güncel
-                  </span>
-                  {report.parameters && Object.keys(report.parameters).length > 0 && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900 text-purple-300">
-                      Parametreli
-                    </span>
-                  )}
-                  {report.is_registered && (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 text-green-300">
-                      Kayıtlı
-                    </span>
-                  )}
-                </div>
-              </div>
+
+        {/* Rapor Listesi */}
+        {loading ? renderSkeletons() : (
+          <div>
+            {/* Sonuç Sayısı */}
+            <div className="flex justify-between items-center mb-4">
+              <Text color="gray.400" fontSize="sm">
+                {filteredReports.length} sonuç bulundu
+              </Text>
               
-              {viewMode === 'list' && (
-                <button
-                  className="ml-6 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleReportClick(report);
-                  }}
+              {/* Sıralama/Görünüm Seçenekleri */}
+              <div className="flex space-x-1 bg-slate-800 rounded-lg p-1 border border-slate-700">
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  colorScheme="gray"
+                  borderRadius="md"
+                  isActive={true}
+                  _active={{ bg: 'blue.600', color: 'white' }}
                 >
-                  Görüntüle
-                </button>
-              )}
-            </motion.div>
-          ))
+                  <Squares2X2Icon className="h-4 w-4" />
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  colorScheme="gray"
+                  borderRadius="md"
+                >
+                  <ListBulletIcon className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            
+            {filteredReports.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {filteredReports.map((report, index) => (
+                  <div 
+                    key={report.id || index}
+                    className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl border border-slate-700 hover:border-blue-600/50 overflow-hidden shadow-lg hover:shadow-blue-900/20 transition-all duration-300"
+                  >
+                    <div className="p-5">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-start">
+                          <div className="bg-blue-600/20 border border-blue-500/20 rounded-md p-2 mr-3">
+                            <ArrowDownTrayIcon className="h-5 w-5 text-blue-400" />
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-white truncate max-w-[180px]">
+                              {report.display_name}
+                            </h3>
+                            <Text fontSize="xs" color="gray.400">
+                              {report.category || 'Genel'}
+                            </Text>
+                          </div>
+                        </div>
+                        
+                        <IconButton
+                          aria-label="Favori Ekle/Çıkar"
+                          icon={report.is_favorite ? 
+                            <StarIcon className="h-5 w-5 text-yellow-400 fill-current" /> : 
+                            <StarIcon className="h-5 w-5" />
+                          }
+                          size="sm"
+                          variant="ghost"
+                          colorScheme={report.is_favorite ? "yellow" : "gray"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleFavorite(report);
+                          }}
+                        />
+                      </div>
+                      
+                      <Text 
+                        fontSize="sm" 
+                        color="gray.300" 
+                        mb={5}
+                        noOfLines={3}
+                      >
+                        {report.description || "Bu rapor için açıklama bulunmamaktadır."}
+                      </Text>
+                      
+                      <div className="flex justify-between items-center">
+                        <Text fontSize="xs" color="gray.500">
+                          Son çalıştırma: {report.last_run 
+                            ? new Date(report.last_run).toLocaleDateString('tr-TR') 
+                            : "Henüz çalıştırılmadı"
+                          }
+                        </Text>
+                        
+                        <ButtonGroup size="sm" spacing={3}>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            colorScheme="blue"
+                            leftIcon={<InformationCircleIcon className="h-4 w-4" />}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedReport(report);
+                              setIsModalOpen(true);
+                            }}
+                          >
+                            Detay
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            colorScheme="blue" 
+                            leftIcon={<ViewIcon className="h-4 w-4" />}
+                            onClick={() => handleReportClick(report)}
+                          >
+                            Görüntüle
+                          </Button>
+                        </ButtonGroup>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 text-center">
+                <MagnifyingGlassIcon className="h-12 w-12 mx-auto text-gray-500 mb-3" />
+                <Heading as="h3" size="md" mb={2}>Rapor Bulunamadı</Heading>
+                <Text color="gray.400">
+                  Arama kriterlerinize uygun rapor bulunamadı. Lütfen farklı anahtar kelimeler deneyin.
+                </Text>
+              </div>
+            )}
+          </div>
         )}
       </div>
-    </div>
-  );
+    );
+  };
 
-  // Favori Raporları render etme
-  const renderFavoriteReports = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {favorites.length === 0 ? (
-        <div className="col-span-full py-12 flex flex-col items-center justify-center bg-slate-800 rounded-xl border border-slate-700">
-          <div className="p-4 bg-slate-700 rounded-full mb-4">
-            <StarIcon className="h-8 w-8 text-yellow-400" />
+  // Favori Raporlar görünümü güncelleniyor
+  const renderFavoriteReports = () => {
+    return (
+      <div>
+        <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 rounded-xl p-5 mb-6 border border-purple-800/40">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+            <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-3 rounded-lg shadow-lg">
+              <StarIcon className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <Heading as="h2" size="md" mb={1}>Favori Raporlarınız</Heading>
+              <Text color="gray.300">
+                En sık kullandığınız raporları burada bulabilirsiniz. Raporları favorilerinize eklemek için rapor kartındaki yıldız ikonuna tıklayın.
+              </Text>
+            </div>
           </div>
-          <h3 className="text-lg font-medium text-white mb-2">Henüz favori raporunuz yok</h3>
-          <p className="text-gray-400 text-center max-w-md">
-            Raporlar bölümünden sık kullandığınız raporları favorilere ekleyebilirsiniz.
-          </p>
-          <button
-            className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-            onClick={() => setSelectedTab(1)}
-          >
-            Raporları Görüntüle
-          </button>
         </div>
-      ) : (
-        filteredReports
-          .filter(report => favorites.includes(report.report_name))
-          .map((report, index) => (
-            <motion.div
-              key={report.report_name || index}
-              className="relative p-5 rounded-xl bg-slate-800 border border-slate-700 hover:border-blue-500 transition-all duration-200 cursor-pointer
-                       group hover:-translate-y-1 hover:shadow-xl"
-              whileHover={{ scale: 1.02 }}
-              onClick={() => {
-                setSelectedReport(report);
-                setIsModalOpen(true);
-              }}
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div key={index} className="bg-slate-800 rounded-xl p-5 animate-pulse border border-slate-700">
+                <div className="flex items-center mb-4">
+                  <div className="h-10 w-10 bg-slate-700 rounded-md mr-3"></div>
+                  <div className="flex-1">
+                    <div className="h-5 bg-slate-700 rounded w-3/4 mb-2"></div>
+                    <div className="h-3 bg-slate-700 rounded w-1/2"></div>
+                  </div>
+                </div>
+                <div className="h-16 bg-slate-700 rounded mb-4"></div>
+                <div className="flex justify-between">
+                  <div className="h-8 w-20 bg-slate-700 rounded"></div>
+                  <div className="h-8 w-8 bg-slate-700 rounded-full"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : favorites.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {favorites.map((report, index) => (
+              <div 
+                key={report.id || index}
+                className="bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-xl border border-purple-700/30 hover:border-purple-500/50 overflow-hidden shadow-lg hover:shadow-purple-900/20 transition-all duration-300"
+              >
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start">
+                      <div className="bg-purple-600/20 border border-purple-500/20 rounded-md p-2 mr-3">
+                        <ArrowDownTrayIcon className="h-5 w-5 text-purple-400" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-white truncate max-w-[180px]">
+                          {report.display_name}
+                        </h3>
+                        <Text fontSize="xs" color="gray.400">
+                          {report.category || 'Genel'}
+                        </Text>
+                      </div>
+                    </div>
+                    
+                    <IconButton
+                      aria-label="Favorilerden Çıkar"
+                      icon={<StarIcon className="h-5 w-5 text-yellow-400 fill-current" />}
+                      size="sm"
+                      variant="ghost"
+                      colorScheme="yellow"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleFavorite(report);
+                      }}
+                    />
+                  </div>
+                  
+                  <Text 
+                    fontSize="sm" 
+                    color="gray.300" 
+                    mb={5}
+                    noOfLines={3}
+                  >
+                    {report.description || "Bu rapor için açıklama bulunmamaktadır."}
+                  </Text>
+                  
+                  <div className="flex justify-between items-center">
+                    <Text fontSize="xs" color="gray.500">
+                      Son çalıştırma: {report.last_run 
+                        ? new Date(report.last_run).toLocaleDateString('tr-TR') 
+                        : "Henüz çalıştırılmadı"
+                      }
+                    </Text>
+                    
+                    <ButtonGroup size="sm" spacing={3}>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        colorScheme="purple"
+                        leftIcon={<InformationCircleIcon className="h-4 w-4" />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedReport(report);
+                          setIsModalOpen(true);
+                        }}
+                      >
+                        Detay
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        colorScheme="purple" 
+                        leftIcon={<ViewIcon className="h-4 w-4" />}
+                        onClick={() => handleReportClick(report)}
+                      >
+                        Görüntüle
+                      </Button>
+                    </ButtonGroup>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 text-center">
+            <div className="bg-slate-700 rounded-full h-16 w-16 flex items-center justify-center mx-auto mb-4">
+              <StarIcon className="h-8 w-8 text-gray-500" />
+            </div>
+            <Heading as="h3" size="md" mb={2}>Henüz Favori Rapor Yok</Heading>
+            <Text color="gray.400" mb={6}>
+              Favori raporlarınız burada görüntülenecek. Rapor kartlarındaki yıldız ikonuna tıklayarak favori ekleyebilirsiniz.
+            </Text>
+            <Button 
+              colorScheme="purple" 
+              leftIcon={<ListBulletIcon className="h-4 w-4" />}
+              onClick={() => setSelectedTab(1)}
             >
-              <div className="flex items-start justify-between">
-                <h3 className="font-semibold text-white text-lg mb-3">
-                  {report.display_name}
-                </h3>
-                <button
-                  className="text-yellow-400 ml-4"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleFavorite(report);
-                  }}
-                >
-                  <StarIconSolid className="h-5 w-5" />
-                </button>
-              </div>
-              
-              <p className="text-gray-400 mt-2 mb-4">
-                {report.description || "Bu rapor için açıklama bulunmamaktadır."}
-              </p>
-              
-              <div className="flex flex-wrap gap-2 mt-4">
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900 text-blue-300">
-                  Güncel
-                </span>
-                {report.parameters && Object.keys(report.parameters).length > 0 && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900 text-purple-300">
-                    Parametreli
-                  </span>
-                )}
-                {report.is_registered && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900 text-green-300">
-                    Kayıtlı
-                  </span>
-                )}
-              </div>
-            </motion.div>
-          ))
-      )}
-    </div>
-  );
+              Tüm Raporları Görüntüle
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Ana render
   return (
     <div className="min-h-screen bg-slate-900 text-white p-5">
-      {/* Üst Navbar */}
-      <div className="flex items-center justify-between mb-8 border-b border-slate-700 pb-4">
-        <h1 className="text-2xl font-bold">Knowhy Raporlama</h1>
-        
-        <div className="flex items-center space-x-4">
-          <button
-            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm rounded-lg border border-slate-700 flex items-center space-x-2"
-            onClick={() => fetchDashboardData()}
-          >
-            <ArrowPathIcon className="h-4 w-4" />
-            <span className="hidden md:inline">{timeRange === '24h' ? 'Son 24 Saat' : timeRange === '7d' ? 'Son 7 Gün' : 'Son 30 Gün'}</span>
-          </button>
+      {/* Modern Üst Navbar */}
+      <div className="bg-gradient-to-r from-blue-900 to-slate-800 -mx-5 px-5 py-4 mb-8 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+          <div className="flex items-center mb-4 sm:mb-0">
+            <div className="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center font-semibold mr-3 shadow-lg">
+              <span className="text-xl font-bold">K</span>
+            </div>
+            <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-blue-200">
+              Knowhy Raporlama
+            </h1>
+          </div>
           
-          <button
-            className="p-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700"
-          >
-            <CogIcon className="h-5 w-5" />
-          </button>
-          
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center font-semibold">
-            K
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-between sm:justify-end">
+            <button
+              className="flex items-center px-3 py-2 bg-slate-800/70 hover:bg-slate-700 text-white text-sm rounded-lg border border-slate-600/30 shadow transition-colors"
+              onClick={() => fetchDashboardData()}
+            >
+              <ArrowPathIcon className="h-4 w-4 mr-1" />
+              <span className="hidden md:inline">Yenile</span>
+            </button>
+            
+            <button
+              className="flex items-center px-3 py-2 bg-slate-800/70 hover:bg-slate-700 text-white text-sm rounded-lg border border-slate-600/30 shadow transition-colors"
+              onClick={() => {
+                // Ayarlar modalı
+              }}
+            >
+              <CogIcon className="h-4 w-4 mr-1" />
+              <span className="hidden md:inline">Ayarlar</span>
+            </button>
+            
+            <Menu>
+              <MenuButton
+                as={Button}
+                variant="ghost"
+                className="flex items-center p-1 rounded-full overflow-hidden bg-blue-600 hover:bg-blue-700 transition-colors shadow"
+              >
+                <Avatar 
+                  size="sm" 
+                  name="Kullanıcı" 
+                  bg="blue.700"
+                  color="white" 
+                />
+              </MenuButton>
+              <MenuList 
+                bg="gray.800" 
+                borderColor="gray.700"
+              >
+                <MenuItem 
+                  _hover={{ bg: 'gray.700' }} 
+                  _focus={{ bg: 'gray.700' }}
+                  icon={<Icon as={ViewIcon} />}
+                >
+                  Profilim
+                </MenuItem>
+                <MenuItem 
+                  _hover={{ bg: 'gray.700' }} 
+                  _focus={{ bg: 'gray.700' }}
+                  icon={<Icon as={SettingsIcon} />}
+                >
+                  Hesap Ayarları
+                </MenuItem>
+                <MenuDivider borderColor="gray.700" />
+                <MenuItem 
+                  _hover={{ bg: 'gray.700' }} 
+                  _focus={{ bg: 'gray.700' }}
+                  icon={<Icon as={TimeIcon} />}
+                >
+                  Çıkış Yap
+                </MenuItem>
+              </MenuList>
+            </Menu>
           </div>
         </div>
       </div>
 
-      {/* Tab navigasyonu */}
+      {/* Modern Tab Navigasyonu */}
       <div className="mb-8">
-        <div className="flex border-b border-slate-700">
+        <div className="flex flex-wrap bg-slate-800 rounded-xl p-1.5 shadow-lg">
           <button 
-            className={`px-6 py-3 text-sm font-medium ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center ${
               selectedTab === 0 
-                ? 'text-white border-b-2 border-blue-500' 
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-blue-600 text-white shadow-md' 
+                : 'text-gray-400 hover:text-white hover:bg-slate-700'
             }`}
             onClick={() => setSelectedTab(0)}
           >
+            <Squares2X2Icon className="w-4 h-4 mr-1.5" />
             Dashboard
           </button>
           <button 
-            className={`px-6 py-3 text-sm font-medium ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center ${
               selectedTab === 1 
-                ? 'text-white border-b-2 border-blue-500' 
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-blue-600 text-white shadow-md' 
+                : 'text-gray-400 hover:text-white hover:bg-slate-700'
             }`}
             onClick={() => setSelectedTab(1)}
           >
+            <ListBulletIcon className="w-4 h-4 mr-1.5" />
             Raporlar
           </button>
           <button 
-            className={`px-6 py-3 text-sm font-medium ${
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center ${
               selectedTab === 2 
-                ? 'text-white border-b-2 border-blue-500' 
-                : 'text-gray-400 hover:text-white'
+                ? 'bg-blue-600 text-white shadow-md' 
+                : 'text-gray-400 hover:text-white hover:bg-slate-700'
             }`}
             onClick={() => setSelectedTab(2)}
           >
+            <StarIcon className="w-4 h-4 mr-1.5" />
             Favoriler
           </button>
         </div>
@@ -1477,13 +1803,15 @@ const ReportsPage = () => {
       
       {/* Loading overlay */}
       {loading && (
-        <div className="fixed inset-0 bg-slate-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-slate-900 bg-opacity-75 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="flex flex-col items-center">
-            <svg className="animate-spin h-10 w-10 text-blue-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            <p className="text-white text-lg">Yükleniyor...</p>
+            <div className="w-16 h-16 relative">
+              <div className="absolute top-0 left-0 w-full h-full rounded-full border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent animate-spin"></div>
+              <div className="absolute top-1 left-1 w-14 h-14 rounded-full border-4 border-t-transparent border-r-blue-400 border-b-transparent border-l-transparent animate-spin animation-delay-150"></div>
+              <div className="absolute top-2 left-2 w-12 h-12 rounded-full border-4 border-t-transparent border-r-transparent border-b-blue-300 border-l-transparent animate-spin animation-delay-300"></div>
+            </div>
+            <p className="text-white text-lg mt-4 font-medium">Yükleniyor...</p>
+            <p className="text-blue-300 text-sm">Veriler hazırlanıyor...</p>
           </div>
         </div>
       )}
